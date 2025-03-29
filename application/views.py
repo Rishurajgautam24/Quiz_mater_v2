@@ -1,13 +1,14 @@
+# ------------- Imports -------------
 from flask import render_template, redirect, url_for, jsonify, request
 from flask_security import current_user, roles_required
 from flask import current_app as app
 from application.models import Subject, Chapter, Quiz, Question, QuizAttempt, db
 from application.models import User, Role
 from uuid import uuid4
-from sqlalchemy import case
+from sqlalchemy import case, func
 from datetime import datetime, timedelta
 
-# ------------ Dashboard Routes ------------
+# ------------- Admin Dashboard Routes -------------
 @app.route('/admin/dashboard')
 @roles_required('admin')
 def admin_dashboard():
@@ -29,19 +30,20 @@ def user_management():
         return redirect(url_for('index'))
     return render_template('admin/templates/user_management.html')
 
-@app.route('/student/dashboard')
-@roles_required('stud')
-def student_dashboard():
-    if not current_user.is_authenticated:
-        return redirect(url_for('index'))
-    return render_template('student/templates/dashboard.html')
-
 @app.route('/admin/reports')
 @roles_required('admin')
 def reports():
     if not current_user.is_authenticated:
         return redirect(url_for('index'))
     return render_template('admin/templates/reports.html')
+
+# ------------- Student Dashboard Routes -------------
+@app.route('/student/dashboard')
+@roles_required('stud')
+def student_dashboard():
+    if not current_user.is_authenticated:
+        return redirect(url_for('index'))
+    return render_template('student/templates/dashboard.html')
 
 @app.route('/student/quizzes')
 @roles_required('stud')
@@ -66,7 +68,7 @@ def get_current_user():
         'email': current_user.email
     })
 
-# ------- Subject API Routes -------
+# ------------- Subject API Routes -------------
 @app.route('/api/subjects', methods=['GET'])
 def get_subjects():
     """Get All Subjects With Their Chapter Counts"""
@@ -123,7 +125,7 @@ def delete_subject(id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
-# ------- Chapter API Routes -------
+# ------------- Chapter API Routes -------------
 @app.route('/api/subjects/<int:subject_id>/chapters', methods=['GET'])
 def get_chapters(subject_id):
     chapters = Chapter.query.filter_by(subject_id=subject_id).all()
@@ -184,7 +186,7 @@ def delete_chapter(id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
-# ------- Quiz API Routes -------
+# ------------- Quiz API Routes -------------
 @app.route('/api/chapters/<int:chapter_id>/quizzes', methods=['GET'])
 def get_quizzes(chapter_id):
     quizzes = Quiz.query.filter_by(chapter_id=chapter_id).all()
@@ -320,7 +322,7 @@ def delete_quiz(id):
         app.logger.error(f"Error deleting quiz {id}: {str(e)}")
         return jsonify({'error': 'Failed to delete quiz'}), 500
 
-# ------- Question API Routes -------
+# ------------- Question API Routes -------------
 @app.route('/api/quizzes/<int:quiz_id>/questions', methods=['GET'])
 def get_questions(quiz_id):
     questions = Question.query.filter_by(quiz_id=quiz_id).all()
@@ -372,7 +374,7 @@ def manage_question(id):
         'marks': question.marks
     })
 
-# ------- User API Routes -------
+# ------------- User Management API Routes -------------
 @app.route('/api/users', methods=['GET'])
 @roles_required('admin')
 def get_users():
@@ -474,7 +476,7 @@ def toggle_user_status(id):
         db.session.rollback()
         return jsonify({'error': str(e)}), 400
 
-# ------- Report API Routes -------
+# ------------- Report Generation API Routes -------------
 @app.route('/api/reports/summary')
 @roles_required('admin')
 def report_summary():
@@ -713,6 +715,7 @@ def report_time_series():
         
         return jsonify([{'date': date_str, 'avg_score': 0, 'attempts': 0} for date_str in date_range])
 
+# ------------- Student Quiz API Routes -------------
 @app.route('/student/quiz/<int:quiz_id>')
 @roles_required('stud')
 def take_quiz(quiz_id):
@@ -865,6 +868,7 @@ def get_available_quizzes():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+# ------------- Student Performance API Routes -------------
 @app.route('/api/student/stats')
 @roles_required('stud')
 def get_student_stats():
@@ -918,6 +922,7 @@ def get_student_stats():
         app.logger.error(f"Error getting student stats: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
+# ------------- Student Quiz Attempts API Routes -------------
 @app.route('/api/student/attempts')
 @roles_required('stud')
 def get_student_attempts():
@@ -1023,6 +1028,7 @@ def get_attempt_details(attempt_id):
         app.logger.error(f"Error getting attempt details: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to load attempt details'}), 500
 
+# ------------- Helper Functions -------------
 def get_subject_wise_performance(user_id):
     """Helper function to get subject-wise performance stats"""
     from sqlalchemy import func
