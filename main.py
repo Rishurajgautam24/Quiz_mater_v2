@@ -33,7 +33,7 @@ def create_app():
         if not User.query.filter_by(email='test@example.com').first():
             test_user = User(
                 email='test@example.com',
-                username='Test User',
+                username='TestUser',
                 active=True,
                 fs_uniquifier=str(uuid.uuid4())
             )

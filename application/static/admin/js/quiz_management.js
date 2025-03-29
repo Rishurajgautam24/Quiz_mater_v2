@@ -252,13 +252,20 @@ new Vue({
         deleteQuiz(id) {
             if (confirm('Are you sure you want to delete this quiz?')) {
                 axios.delete(`/api/quizzes/${id}`)
-                    .then(() => {
-                        this.loadQuizzes();
+                    .then(response => {
+                        // Remove quiz from local list
+                        this.quizzes = this.quizzes.filter(q => q.id !== id);
                         this.selectedQuizId = null;
                         this.questions = [];
+                        this.error = null;
+                        
+                        // Show success message
+                        this.error = 'Quiz deleted successfully';
+                        setTimeout(() => this.error = null, 3000);
                     })
                     .catch(error => {
-                        this.error = error.response?.data?.message || 'Error deleting quiz';
+                        console.error('Error deleting quiz:', error);
+                        this.error = error.response?.data?.error || 'Failed to delete quiz';
                         setTimeout(() => this.error = null, 5000);
                     });
             }

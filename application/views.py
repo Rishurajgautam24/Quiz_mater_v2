@@ -301,13 +301,24 @@ def update_quiz(id):
 @roles_required('admin')
 def delete_quiz(id):
     try:
+        # Start a transaction
         quiz = Quiz.query.get_or_404(id)
+        
+        # Delete all related quiz attempts first
+        QuizAttempt.query.filter_by(quiz_id=id).delete()
+        
+        # Delete all questions
+        Question.query.filter_by(quiz_id=id).delete()
+        
+        # Finally delete the quiz
         db.session.delete(quiz)
         db.session.commit()
+        
         return jsonify({'message': 'Quiz deleted successfully'})
     except Exception as e:
         db.session.rollback()
-        return jsonify({'error': str(e)}), 400
+        app.logger.error(f"Error deleting quiz {id}: {str(e)}")
+        return jsonify({'error': 'Failed to delete quiz'}), 500
 
 # ------- Question API Routes -------
 @app.route('/api/quizzes/<int:quiz_id>/questions', methods=['GET'])
