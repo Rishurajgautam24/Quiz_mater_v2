@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex">
+    <!-- Sidebar -->
+    {% with active='quizzes' %}
+    {% include 'student/templates/partials/sidebar.html' %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <div class="flex-grow-1">
+        <!-- Keep the existing nav -->
+        <nav class="navbar navbar-dark bg-primary p-3">
+            <div class="container-fluid">
+                <span class="navbar-brand">My Quizzes</span>
+                <div class="d-flex align-items-center">
+                    <span class="text-white me-3">{% raw %}{{ username }}{% endraw %}</span>
+                    <button @click="logout" class="btn btn-outline-light">Logout</button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Quiz Content -->
+        <div class="container-fluid p-4">
+            <div id="app">
+                <!-- Error Alert -->
+                <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
+                    {% raw %}{{ error }}{% endraw %}
+                    <button @click="error = null" type="button" class="btn-close"></button>
+                </div>
+
+                <!-- Quiz Categories -->
+                <div class="row g-4">
+                    <!-- Ongoing Quizzes -->
+                    <div class="col-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-success text-white">
+                                <h5 class="mb-0"><i class="fas fa-play-circle me-2"></i>Ongoing Quizzes</h5>
+                            </div>
+                            <div class="card-body">
+                                <div v-if="quizzes.ongoing.length" class="list-group">
+                                    <div v-for="quiz in quizzes.ongoing" :key="quiz.id" class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h5 class="mb-1">{% raw %}{{ quiz.title }}{% endraw %}</h5>
+                                                <p class="mb-1 text-muted">{% raw %}{{ quiz.description }}{% endraw %}</p>
+                                                <div class="badge bg-primary me-1">{% raw %}{{ quiz.subject_name }}{% endraw %}</div>
+                                                <div class="badge bg-secondary me-1">{% raw %}{{ quiz.chapter_name }}{% endraw %}</div>
+                                                <div class="badge bg-info">Duration: {% raw %}{{ quiz.duration }}{% endraw %} min</div>
+                                                <div class="badge bg-warning">Time Left: {% raw %}{{ formatTimeLeft(quiz.remaining_time) }}{% endraw %}</div>
+                                            </div>
+                                            <a :href="'/student/quiz/' + quiz.id" class="btn btn-success">
+                                                <i class="fas fa-play me-1"></i> Take Quiz
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-else class="text-muted text-center py-3">No ongoing quizzes available</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Upcoming Quizzes -->
+                    <div class="col-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-info text-white">
+                                <h5 class="mb-0"><i class="fas fa-clock me-2"></i>Upcoming Quizzes</h5>
+                            </div>
+                            <div class="card-body">
+                                <div v-if="quizzes.upcoming.length" class="list-group">
+                                    <div v-for="quiz in quizzes.upcoming" :key="quiz.id" class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h5 class="mb-1">{% raw %}{{ quiz.title }}{% endraw %}</h5>
+                                                <p class="mb-1 text-muted">{% raw %}{{ quiz.description }}{% endraw %}</p>
+                                                <div class="badge bg-primary me-1">{% raw %}{{ quiz.subject_name }}{% endraw %}</div>
+                                                <div class="badge bg-secondary me-1">{% raw %}{{ quiz.chapter_name }}{% endraw %}</div>
+                                                <div class="badge bg-info">Duration: {% raw %}{{ quiz.duration }}{% endraw %} min</div>
+                                                <div v-if="quiz.start_time" class="badge bg-secondary">
+                                                    Starts: {% raw %}{{ quiz.start_time }}{% endraw %}
+                                                </div>
+                                                <div v-if="quiz.end_time" class="badge bg-secondary">
+                                                    Ends: {% raw %}{{ quiz.end_time }}{% endraw %}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-else class="text-muted text-center py-3">No upcoming quizzes</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Expired Quizzes -->
+                    <div class="col-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-secondary text-white">
+                                <h5 class="mb-0"><i class="fas fa-history me-2"></i>Past Quizzes</h5>
+                            </div>
+                            <div class="card-body">
+                                <div v-if="quizzes.expired.length" class="list-group">
+                                    <div v-for="quiz in quizzes.expired" :key="quiz.id" class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h5 class="mb-1">{% raw %}{{ quiz.title }}{% endraw %}</h5>
+                                                <p class="mb-1 text-muted">{% raw %}{{ quiz.description }}{% endraw %}</p>
+                                                <div class="badge bg-primary me-1">{% raw %}{{ quiz.subject_name }}{% endraw %}</div>
+                                                <div class="badge bg-secondary me-1">{% raw %}{{ quiz.chapter_name }}{% endraw %}</div>
+                                                <div class="badge bg-danger">Expired</div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-else class="text-muted text-center py-3">No past quizzes</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+new Vue({
+    el: '#app',
+    data: {
+        username: '',
+        quizzes: {
+            ongoing: [],
+            upcoming: [],
+            expired: []
+        },
+        error: null
+    },
+    methods: {
+        fetchQuizzes() {
+            axios.get('/api/student/all-quizzes')
+                .then(response => {
+                    this.quizzes = response.data;
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    this.error = 'Error fetching quizzes';
+                    setTimeout(() => this.error = null, 5000);
+                });
+        },
+        formatTimeLeft(minutes) {
+            if (!minutes) return '';
+            const hours = Math.floor(minutes / 60);
+            const mins = minutes % 60;
+            return hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+        },
+        logout() {
+            axios.post('/api/logout')
+                .then(() => window.location.href = '/')
+                .catch(error => {
+                    this.error = 'Error logging out';
+                    setTimeout(() => this.error = null, 5000);
+                });
+        }
+    },
+    mounted() {
+        this.username = document.querySelector('meta[name="username"]')?.content || '';
+        this.fetchQuizzes();
+        setInterval(this.fetchQuizzes, 60000);
+    }
+});
+</script>
+{% endblock %}

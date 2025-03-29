@@ -1,0 +1,41 @@
+<div class="modal" tabindex="-1" :class="{ 'show': showQuestionModal }" v-if="showQuestionModal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{% raw %}{{ editingQuestion ? 'Edit' : 'Add' }}{% endraw %} Question</h5>
+                <button @click="closeQuestionModal" type="button" class="btn-close"></button>
+            </div>
+            <div class="modal-body">
+                <form @submit.prevent="saveQuestion">
+                    <div class="mb-3">
+                        <label class="form-label">Question Text</label>
+                        <textarea v-model="questionForm.question_text" class="form-control" required></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Options</label>
+                        <div v-for="(option, index) in questionForm.options" :key="index" class="input-group mb-2">
+                            <div class="input-group-text">
+                                <input type="radio" v-model="questionForm.correct_answer" :value="index" required>
+                            </div>
+                            <input v-model="questionForm.options[index]" type="text" class="form-control" required>
+                            <button v-if="index > 1" @click="removeOption(index)" type="button" class="btn btn-danger">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <button v-if="questionForm.options.length < 6" @click="addOption" type="button" class="btn btn-secondary btn-sm">
+                            Add Option
+                        </button>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Marks</label>
+                        <input v-model.number="questionForm.marks" type="number" class="form-control" required min="1">
+                    </div>
+                    <div class="modal-footer px-0 pb-0">
+                        <button type="button" class="btn btn-secondary" @click="closeQuestionModal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

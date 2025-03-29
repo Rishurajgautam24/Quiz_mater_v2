@@ -1,0 +1,130 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex">
+    <!-- Sidebar -->
+    {% with active='user_management' %}
+    {% include 'admin/templates/partials/sidebar.html' %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <div class="flex-grow-1">
+        <nav class="navbar navbar-dark bg-primary p-3">
+            <div class="container-fluid">
+                <span class="navbar-brand">User Management</span>
+                <div class="d-flex align-items-center">
+                    <span class="text-white me-3">{{ current_user.username }}</span>
+                    <button @click="logout" class="btn btn-outline-light">Logout</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container-fluid p-4">
+            <!-- Error Alert -->
+            <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
+                {% raw %}{{ error }}{% endraw %}
+                <button @click="error = null" type="button" class="btn-close"></button>
+            </div>
+
+            <!-- Users Table -->
+            <div class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-users me-2"></i>Users</h5>
+                    <button @click="openUserModal" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i> Add User
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="user in users" :key="user.id">
+                                    <td>{% raw %}{{ user.username }}{% endraw %}</td>
+                                    <td>{% raw %}{{ user.email }}{% endraw %}</td>
+                                    <td>
+                                        <span class="badge" :class="getRoleBadgeClass(user)">
+                                            {% raw %}{{ user.roles.join(', ') }}{% endraw %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <span class="badge" :class="user.active ? 'bg-success' : 'bg-danger'">
+                                            {% raw %}{{ user.active ? 'Active' : 'Inactive' }}{% endraw %}
+                                        </span>
+                                    </td>
+                                    <td>
+                                        <div class="btn-group">
+                                            <button @click="editUser(user)" class="btn btn-sm btn-outline-warning">
+                                                <i class="fas fa-edit"></i>
+                                            </button>
+                                            <button @click="toggleUserStatus(user)" class="btn btn-sm btn-outline-primary">
+                                                <i class="fas" :class="user.active ? 'fa-ban' : 'fa-check'"></i>
+                                            </button>
+                                            <button @click="deleteUser(user.id)" class="btn btn-sm btn-outline-danger">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Modal -->
+<div class="modal" tabindex="-1" :class="{ 'show': showUserModal }" v-if="showUserModal">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{% raw %}{{ editingUser ? 'Edit' : 'Add' }}{% endraw %} User</h5>
+                <button @click="closeUserModal" type="button" class="btn-close"></button>
+            </div>
+            <div class="modal-body">
+                <form @submit.prevent="saveUser">
+                    <div class="mb-3">
+                        <label class="form-label">Username</label>
+                        <input v-model="userForm.username" type="text" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input v-model="userForm.email" type="email" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Password</label>
+                        <input v-model="userForm.password" type="password" class="form-control" :required="!editingUser">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Roles</label>
+                        <div class="form-check" v-for="role in availableRoles" :key="role">
+                            <input class="form-check-input" type="checkbox" 
+                                   v-model="userForm.roles" 
+                                   :value="role">
+                            <label class="form-check-label">{% raw %}{{ role }}{% endraw %}</label>
+                        </div>
+                    </div>
+                    <div class="modal-footer px-0 pb-0">
+                        <button type="button" class="btn btn-secondary" @click="closeUserModal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='admin/js/user_management.js') }}"></script>
+{% endblock %}

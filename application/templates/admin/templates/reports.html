@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="d-flex">
+    <!-- Sidebar -->
+    {% with active='reports' %}
+    {% include 'admin/templates/partials/sidebar.html' %}
+    {% endwith %}
+
+    <!-- Main Content -->
+    <div class="flex-grow-1">
+        <nav class="navbar navbar-dark bg-primary p-3">
+            <div class="container-fluid">
+                <span class="navbar-brand">Reports Dashboard</span>
+                <div class="d-flex align-items-center">
+                    <span class="text-white me-3">{% raw %}{{ username }}{% endraw %}</span>
+                    <button @click="logout" class="btn btn-outline-light">Logout</button>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container-fluid p-4">
+            <!-- Error Alert -->
+            <div v-if="error" class="alert alert-danger alert-dismissible fade show" role="alert">
+                {% raw %}{{ error }}{% endraw %}
+                <button @click="error = null" type="button" class="btn-close"></button>
+            </div>
+
+            <!-- Filters Section -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filters</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <label class="form-label">Time Period</label>
+                            <select v-model="filters.timePeriod" class="form-select" @change="loadReports">
+                                <option value="7days">Last 7 days</option>
+                                <option value="30days">Last 30 days</option>
+                                <option value="90days">Last 90 days</option>
+                                <option value="all">All time</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Subject</label>
+                            <select v-model="filters.subjectId" class="form-select" @change="loadSubjectData">
+                                <option value="">All Subjects</option>
+                                <option v-for="subject in subjects" :key="subject.id" :value="subject.id">
+                                    {% raw %}{{ subject.name }}{% endraw %}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Chapter</label>
+                            <select v-model="filters.chapterId" class="form-select" :disabled="!filters.subjectId" @change="loadReports">
+                                <option value="">All Chapters</option>
+                                <option v-for="chapter in chapters" :key="chapter.id" :value="chapter.id">
+                                    {% raw %}{{ chapter.name }}{% endraw %}
+                                </option>
+                            </select>
+                        </div>
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button @click="loadReports" class="btn btn-primary w-100">
+                                <i class="fas fa-sync-alt me-2"></i> Update Reports
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary Stats Section -->
+            <div class="row g-4 mb-4">
+                <div class="col-md-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <div class="display-4 text-primary mb-2">{% raw %}{{ stats.totalAttempts }}{% endraw %}</div>
+                            <h5 class="text-muted">Quiz Attempts</h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <div class="display-4 text-success mb-2">{% raw %}{{ stats.averageScore }}%{% endraw %}</div>
+                            <h5 class="text-muted">Average Score</h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <div class="display-4 text-info mb-2">{% raw %}{{ stats.activeUsers }}{% endraw %}</div>
+                            <h5 class="text-muted">Active Users</h5>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-3">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-body text-center">
+                            <div class="display-4 text-warning mb-2">{% raw %}{{ stats.totalQuizzes }}{% endraw %}</div>
+                            <h5 class="text-muted">Total Quizzes</h5>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="row g-4">
+                <!-- Quiz Performance Chart -->
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0"><i class="fas fa-chart-line me-2"></i>Quiz Performance</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="quizPerformanceChart" height="300"></canvas>
+                            <p v-if="!hasData" class="text-muted text-center mt-5">
+                                <i class="fas fa-info-circle me-2"></i>No data available for the selected filters
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subject Popularity Chart -->
+                <div class="col-md-6">
+                    <div class="card shadow-sm h-100">
+                        <div class="card-header bg-light">
+                            <h5 class="mb-0"><i class="fas fa-chart-pie me-2"></i>Subject Popularity</h5>
+                        </div>
+                        <div class="card-body">
+                            <canvas id="subjectPopularityChart" height="300"></canvas>
+                            <p v-if="!hasData" class="text-muted text-center mt-5">
+                                <i class="fas fa-info-circle me-2"></i>No data available for the selected filters
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Detailed Report Table -->
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="fas fa-table me-2"></i>Quiz Activity</h5>
+                </div>
+                <div class="card-body">
+                    <div v-if="quizActivity.length" class="table-responsive">
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Quiz</th>
+                                    <th>Chapter</th>
+                                    <th>Subject</th>
+                                    <th>Attempts</th>
+                                    <th>Avg. Score</th>
+                                    <th>Pass Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="activity in quizActivity" :key="activity.quiz_id">
+                                    <td>{% raw %}{{ activity.quiz_title }}{% endraw %}</td>
+                                    <td>{% raw %}{{ activity.chapter_name }}{% endraw %}</td>
+                                    <td>{% raw %}{{ activity.subject_name }}{% endraw %}</td>
+                                    <td>{% raw %}{{ activity.attempts }}{% endraw %}</td>
+                                    <td>{% raw %}{{ activity.avg_score }}%{% endraw %}</td>
+                                    <td>{% raw %}{{ activity.pass_rate }}%{% endraw %}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <p v-else class="text-muted text-center py-4">
+                        <i class="fas fa-info-circle me-2"></i>No quiz activity data available for the selected filters
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<!-- Chart.js -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+<script src="{{ url_for('static', filename='admin/js/reports.js') }}"></script>
+{% endblock %}

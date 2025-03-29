@@ -1,0 +1,42 @@
+<div class="modal" :class="{'show d-block': showQuizModal}" tabindex="-1" style="background: rgba(0,0,0,0.5);">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">{% raw %}{{ editingQuiz ? 'Edit Quiz' : 'Create Quiz' }}{% endraw %}</h5>
+                <button @click="closeQuizModal" type="button" class="btn-close"></button>
+            </div>
+            <div class="modal-body">
+                <form @submit.prevent="saveQuiz">
+                    <div class="mb-3">
+                        <label class="form-label">Title</label>
+                        <input v-model="quizForm.title" type="text" class="form-control" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea v-model="quizForm.description" class="form-control"></textarea>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Quiz Duration</label>
+                        <div class="row g-2">
+                            <div class="col">
+                                <input v-model.number="quizForm.duration_hours" type="number" class="form-control" placeholder="Hours" min="0">
+                            </div>
+                            <div class="col">
+                                <input v-model.number="quizForm.duration_minutes" type="number" class="form-control" placeholder="Minutes" min="0" max="59">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Start Time</label>
+                        <input v-model="quizForm.start_time" type="datetime-local" class="form-control">
+                        <small class="text-muted">When the quiz will become available</small>
+                    </div>
+                    <div class="modal-footer px-0 pb-0">
+                        <button type="button" class="btn btn-secondary" @click="closeQuizModal">Close</button>
+                        <button type="submit" class="btn btn-primary">Save</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>

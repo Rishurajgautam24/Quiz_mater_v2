@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="app">
+    <div class="d-flex vh-100">
+        <!-- Sidebar Component -->
+        <div class="bg-dark text-white position-fixed start-0 top-0 bottom-0" style="width: 250px; z-index: 1000; overflow-y: auto;">
+            <div class="p-3 border-bottom border-secondary">
+                <h4 class="mb-0">Quiz Master</h4>
+            </div>
+            <div class="p-3">
+                <div class="nav flex-column">
+                    <a href="{{ url_for('student_dashboard') }}" class="nav-link text-white py-2 mb-2">
+                        <i class="fas fa-home me-2"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('student_quizzes') }}" class="nav-link text-white py-2 mb-2">
+                        <i class="fas fa-tasks me-2"></i> Available Quizzes
+                    </a>
+                    <a href="{{ url_for('student_results') }}" class="nav-link text-white py-2 mb-2 active bg-primary">
+                        <i class="fas fa-chart-line me-2"></i> My Results
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Wrapper -->
+        <div class="flex-grow-1" style="margin-left: 250px; width: calc(100% - 250px);">
+            <!-- Top Navigation -->
+            <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+                <div class="container-fluid">
+                    <span class="navbar-brand">My Results</span>
+                    <div class="d-flex align-items-center">
+                        <span class="text-white me-3">
+                            <i class="fas fa-user me-2"></i>{% raw %}{{ username }}{% endraw %}
+                        </span>
+                        <button @click="logout" class="btn btn-outline-light">
+                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <!-- Main Content -->
+            <div class="main-content p-4">
+                <!-- Performance Summary -->
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <div class="card shadow-sm">
+                            <div class="card-body">
+                                <h6 class="text-muted">Overall Score</h6>
+                                <div class="d-flex align-items-center">
+                                    <h2 class="mb-0">{% raw %}{{ stats.averageScore.toFixed(1) }}{% endraw %}%</h2>
+                                    <i class="fas fa-chart-line fs-1 ms-auto" :class="getScoreColor(stats.averageScore)"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card shadow-sm">
+                            <div class="card-body">
+                                <h6 class="text-muted">Quizzes Attempted</h6>
+                                <div class="d-flex align-items-center">
+                                    <h2 class="mb-0">{% raw %}{{ stats.totalAttempts }}{% endraw %}</h2>
+                                    <i class="fas fa-tasks fs-1 ms-auto text-primary"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card shadow-sm">
+                            <div class="card-body">
+                                <h6 class="text-muted">Pass Rate</h6>
+                                <div class="d-flex align-items-center">
+                                    <h2 class="mb-0">{% raw %}{{ stats.passRate.toFixed(1) }}{% endraw %}%</h2>
+                                    <i class="fas fa-trophy fs-1 ms-auto text-warning"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Results Table -->
+                <div class="card shadow-sm">
+                    <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Quiz Attempts History</h5>
+                        <div class="input-group" style="width: 300px;">
+                            <input type="text" v-model="searchQuery" class="form-control" placeholder="Search quizzes...">
+                            <span class="input-group-text bg-white">
+                                <i class="fas fa-search"></i>
+                            </span>
+                        </div>
+                    </div>
+                    <div class="card-body p-0">
+                        <div v-if="loading" class="text-center py-5">
+                            <div class="spinner-border text-primary" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <p class="mt-2">Loading results...</p>
+                        </div>
+                        <div v-else>
+                            <div class="table-responsive">
+                                <table class="table table-hover mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Quiz Title</th>
+                                            <th>Subject</th>
+                                            <th>Score</th>
+                                            <th>Status</th>
+                                            <th>Date</th>
+                                            <th>Actions</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="attempt in filteredAttempts" :key="attempt.id">
+                                            <td>{% raw %}{{ attempt.quiz_title }}{% endraw %}</td>
+                                            <td>{% raw %}{{ attempt.subject_name }}{% endraw %}</td>
+                                            <td>
+                                                <span class="badge" :class="getScoreBadgeClass(attempt.score)">
+                                                    {% raw %}{{ attempt.score.toFixed(1) }}{% endraw %}%
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <span class="badge" :class="attempt.score >= 40 ? 'bg-success' : 'bg-danger'">
+                                                    {% raw %}{{ attempt.score >= 40 ? 'PASS' : 'FAIL' }}{% endraw %}
+                                                </span>
+                                            </td>
+                                            <td>{% raw %}{{ formatDate(attempt.date) }}{% endraw %}</td>
+                                            <td>
+                                                <button @click="viewAttemptDetails(attempt)" class="btn btn-sm btn-outline-primary">
+                                                    <i class="fas fa-eye me-1"></i> View Details
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            
+                            <!-- Empty State -->
+                            <div v-if="filteredAttempts.length === 0" class="text-center py-5">
+                                <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                                <h5>No Results Found</h5>
+                                <p class="text-muted">Try adjusting your search or attempt some quizzes.</p>
+                                <a href="{{ url_for('student_quizzes') }}" class="btn btn-primary mt-2">
+                                    <i class="fas fa-tasks me-2"></i>Browse Quizzes
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Attempt Details Modal -->
+    <div class="modal fade" id="attemptDetailsModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header" v-if="selectedAttempt" 
+                     :class="selectedAttempt.score >= 40 ? 'bg-success text-white' : 'bg-danger text-white'">
+                    <h5 class="modal-title">Quiz Result Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0" v-if="selectedAttempt">
+                    <!-- Quiz Summary -->
+                    <div class="p-4 text-center border-bottom">
+                        <h4 class="mb-3">{% raw %}{{ selectedAttempt.quiz_title }}{% endraw %}</h4>
+                        <div class="d-flex justify-content-center gap-4 mb-3">
+                            <div class="text-center">
+                                <div class="fs-4 fw-bold" :class="getScoreColor(selectedAttempt.score)">
+                                    {% raw %}{{ selectedAttempt.score.toFixed(1) }}%{% endraw %}
+                                </div>
+                                <div class="text-muted small">Score</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="fs-4 fw-bold text-primary">
+                                    {% raw %}{{ selectedAttempt.correct_answers }}{% endraw %}/{% raw %}{{ selectedAttempt.total_questions }}{% endraw %}
+                                </div>
+                                <div class="text-muted small">Correct Answers</div>
+                            </div>
+                        </div>
+                        <div class="badge" :class="selectedAttempt.score >= 40 ? 'bg-success' : 'bg-danger'">
+                            {% raw %}{{ selectedAttempt.score >= 40 ? 'PASS' : 'FAIL' }}{% endraw %}
+                        </div>
+                    </div>
+
+                    <!-- Questions List -->
+                    <div class="accordion accordion-flush" v-if="selectedAttempt.questions">
+                        <div v-for="(question, index) in selectedAttempt.questions" 
+                             :key="index" 
+                             class="accordion-item">
+                            <h2 class="accordion-header" :id="'heading'+index">
+                                <button class="accordion-button collapsed" 
+                                        type="button" 
+                                        data-bs-toggle="collapse" 
+                                        :data-bs-target="'#question'+index">
+                                    <div class="question-content">
+                                        <span class="question-number text-muted">Q{% raw %}{{ index + 1 }}{% endraw %}</span>
+                                        <span class="question-text">{% raw %}{{ question.question_text }}{% endraw %}</span>
+                                        <div class="question-score">
+                                            <span class="badge" :class="question.is_correct ? 'bg-success' : 'bg-danger'">
+                                                {% raw %}{{ question.scored_marks }}{% endraw %}/{% raw %}{{ question.marks }}{% endraw %}
+                                            </span>
+                                            <i :class="'fas ' + (question.is_correct ? 'fa-check-circle text-success' : 'fa-times-circle text-danger')"></i>
+                                        </div>
+                                    </div>
+                                </button>
+                            </h2>
+                            <div :id="'question'+index" 
+                                 class="accordion-collapse collapse" 
+                                 :aria-labelledby="'heading'+index">
+                                <div class="accordion-body bg-light">
+                                    <!-- Your Answer -->
+                                    <div class="mb-3">
+                                        <label class="fw-semibold mb-2">Your Answer:</label>
+                                        <div v-if="question.user_answer" 
+                                             class="p-3 rounded" 
+                                             :class="question.is_correct ? 'bg-success bg-opacity-10' : 'bg-danger bg-opacity-10'">
+                                            <i :class="'fas me-2 ' + (question.is_correct ? 'fa-check text-success' : 'fa-times text-danger')"></i>
+                                            {% raw %}{{ question.user_answer }}{% endraw %}
+                                        </div>
+                                        <div v-else class="text-muted fst-italic p-3 bg-light rounded">
+                                            <i class="fas fa-minus-circle me-2"></i>Not answered
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Correct Answer - Always show -->
+                                    <div class="mb-2">
+                                        <label class="fw-semibold mb-2">Correct Answer:</label>
+                                        <div class="p-3 bg-success bg-opacity-10 rounded">
+                                            <i class="fas fa-check text-success me-2"></i>
+                                            {% raw %}{{ question.correct_answer }}{% endraw %}
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Question Points -->
+                                    <div class="mt-2 text-end">
+                                        <span class="badge bg-secondary">
+                                            Points: {% raw %}{{ question.scored_marks }}{% endraw %}/{% raw %}{{ question.marks }}{% endraw %}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='student/js/results.js') }}"></script>
+{% endblock %}
+
+<style>
+.accordion-button {
+    position: relative;
+    padding: 1rem 1.25rem;
+    border-left: 4px solid transparent;
+}
+
+.accordion-button:not(.collapsed)::after {
+    position: absolute;
+    right: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%) rotate(-180deg);
+}
+
+.accordion-button.collapsed::after {
+    position: absolute;
+    right: 1.25rem;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.accordion-button:focus {
+    box-shadow: none;
+    border-color: inherit;
+}
+
+.accordion-item {
+    border-bottom: 1px solid rgba(0,0,0,.125);
+}
+
+.accordion-item:last-child {
+    border-bottom: none;
+}
+
+.badge {
+    min-width: 40px;
+    padding: 0.5em 0.75em;
+}
+
+.text-truncate {
+    max-width: calc(100% - 150px);
+}
+
+@media (max-width: 576px) {
+    .text-truncate {
+        max-width: calc(100% - 100px);
+    }
+    
+    .accordion-button {
+        padding: 0.75rem 1rem;
+    }
+}
+</style>

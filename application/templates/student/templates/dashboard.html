@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div id="app">
+    <div class="d-flex vh-100">
+        <!-- Sidebar Component -->
+        <div class="bg-dark text-white position-fixed start-0 top-0 bottom-0" style="width: 250px; z-index: 1000; overflow-y: auto;">
+            <div class="p-3 border-bottom border-secondary">
+                <h4 class="mb-0">Quiz Master</h4>
+            </div>
+            <div class="p-3">
+                <div class="nav flex-column">
+                    <a href="{{ url_for('student_dashboard') }}" 
+                       class="nav-link text-white py-2 mb-2 active bg-primary">
+                        <i class="fas fa-home me-2"></i> Dashboard
+                    </a>
+                    <a href="{{ url_for('student_quizzes') }}" 
+                       class="nav-link text-white py-2 mb-2">
+                        <i class="fas fa-tasks me-2"></i> Available Quizzes
+                    </a>
+                    <a href="{{ url_for('student_results') }}" 
+                       class="nav-link text-white py-2 mb-2">
+                        <i class="fas fa-chart-line me-2"></i> My Results
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Wrapper -->
+        <div class="flex-grow-1" style="margin-left: 250px; width: calc(100% - 250px);">
+            <!-- Top Navigation -->
+            <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top" style="z-index: 900;">
+                <div class="container-fluid">
+                    <span class="navbar-brand">Student Dashboard</span>
+                    <div class="d-flex align-items-center">
+                        <span class="text-white me-3">
+                            <i class="fas fa-user me-2"></i>{% raw %}{{ username }}{% endraw %}
+                        </span>
+                        <button @click="logout" class="btn btn-outline-light">
+                            <i class="fas fa-sign-out-alt me-2"></i>Logout
+                        </button>
+                    </div>
+                </div>
+            </nav>
+            
+            <!-- Dashboard Content -->
+            <div class="main-content p-4">
+                <!-- Stats Cards -->
+                <div class="row g-4 mb-4">
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="text-muted">Total Quizzes Taken</h6>
+                                <div class="d-flex align-items-center">
+                                    <h2 class="mb-0">{% raw %}{{ stats.totalAttempts || 0 }}{% endraw %}</h2>
+                                    <i class="fas fa-tasks fs-1 ms-auto text-primary"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="text-muted">Average Score</h6>
+                                <div class="d-flex align-items-center">
+                                    <h2 class="mb-0">{% raw %}{{ stats.averageScore || 0 }}{% endraw %}%</h2>
+                                    <i class="fas fa-chart-line fs-1 ms-auto text-success"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card">
+                            <div class="card-body">
+                                <h6 class="text-muted">Subjects Covered</h6>
+                                <div class="d-flex align-items-center">
+                                    <h2 class="mb-0">{% raw %}{{ stats.subjectPerformance ? stats.subjectPerformance.length : 0 }}{% endraw %}</h2>
+                                    <i class="fas fa-book fs-1 ms-auto text-info"></i>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <!-- Recent Performance -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h5 class="card-title mb-0">Recent Performance</h5>
+                            </div>
+                            <div class="card-body">
+                                <div v-if="stats.recentPerformance && stats.recentPerformance.length" class="list-group">
+                                    <div v-for="attempt in stats.recentPerformance" 
+                                         :key="attempt.date" 
+                                         class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <div>
+                                                <h6 class="mb-1">{% raw %}{{ attempt.quiz_title }}{% endraw %}</h6>
+                                                <small class="text-muted">{% raw %}{{ attempt.date }}{% endraw %}</small>
+                                            </div>
+                                            <span :class="'badge ' + (attempt.score >= 40 ? 'bg-success' : 'bg-danger')">
+                                                {% raw %}{{ attempt.score }}{% endraw %}%
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p v-else class="text-center text-muted my-4">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    No quizzes attempted yet
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Subject Performance -->
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-light">
+                                <h5 class="card-title mb-0">Subject Performance</h5>
+                            </div>
+                            <div class="card-body">
+                                <div v-if="stats.subjectPerformance && stats.subjectPerformance.length">
+                                    <div v-for="subject in stats.subjectPerformance" 
+                                         :key="subject.subject" 
+                                         class="mb-3">
+                                        <div class="d-flex justify-content-between mb-1">
+                                            <span>{% raw %}{{ subject.subject }}{% endraw %}</span>
+                                            <span>{% raw %}{{ subject.avgScore }}{% endraw %}%</span>
+                                        </div>
+                                        <div class="progress" style="height: 10px;">
+                                            <div class="progress-bar" 
+                                                 :class="getProgressBarClass(subject.avgScore)"
+                                                 :style="{ width: subject.avgScore + '%' }">
+                                            </div>
+                                        </div>
+                                        <small class="text-muted">{% raw %}{{ subject.attempts }}{% endraw %} attempts</small>
+                                    </div>
+                                </div>
+                                <p v-else class="text-center text-muted my-4">
+                                    <i class="fas fa-info-circle me-2"></i>
+                                    No subject data available
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='student/js/dashboard.js') }}"></script>
+{% endblock %}

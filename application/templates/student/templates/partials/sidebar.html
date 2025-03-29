@@ -1,0 +1,55 @@
+<div id="sidebar" class="d-flex flex-column flex-shrink-0 p-3 text-white bg-dark" style="width: 280px; min-height: 100vh;">
+    <a href="/student/dashboard" class="d-flex align-items-center mb-3 mb-md-0 me-md-auto text-white text-decoration-none">
+        <span class="fs-4">Student Portal</span>
+    </a>
+    <hr>
+    <ul class="nav nav-pills flex-column mb-auto">
+        <li class="nav-item">
+            <a href="/student/dashboard" class="nav-link text-white {% if active == 'dashboard' %}active{% endif %}">
+                <i class="fas fa-home me-2"></i>
+                Dashboard
+            </a>
+        </li>
+        <li>
+            <a href="/student/quizzes" class="nav-link text-white {% if active == 'quizzes' %}active{% endif %}">
+                <i class="fas fa-tasks me-2"></i>
+                Quizzes
+            </a>
+        </li>
+        <li>
+            <a href="/student/results" class="nav-link text-white {% if active == 'results' %}active{% endif %}">
+                <i class="fas fa-chart-line me-2"></i>
+                Results
+            </a>
+        </li>
+    </ul>
+    <hr>
+    <div class="dropdown">
+        <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fas fa-user-circle me-2 fs-4"></i>
+            <strong>{{ displayName }}</strong>
+        </a>
+        <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="userDropdown">
+            <li><a class="dropdown-item" href="#" @click="handleLogout">Sign out</a></li>
+        </ul>
+    </div>
+</div>
+
+<script>
+new Vue({
+    el: '#sidebar',
+    data: {
+        displayName: ''
+    },
+    methods: {
+        handleLogout() {
+            axios.post('/api/logout')
+                .then(() => window.location.href = '/')
+                .catch(error => console.error('Logout failed:', error));
+        }
+    },
+    mounted() {
+        this.displayName = document.querySelector('meta[name="username"]')?.content || '';
+    }
+});
+</script>
