@@ -146,6 +146,64 @@
                     </p>
                 </div>
             </div>
+
+            <!-- Background Tasks Section -->
+            <div v-show="currentSection === 'tasks'" class="card shadow-sm">
+                <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-tasks me-2"></i>Background Tasks</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-4">
+                        <!-- Monthly Report Task -->
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-file-alt me-2"></i>Monthly Report</h5>
+                                    <p class="card-text">Generate monthly performance report for all users.</p>
+                                    <button @click="triggerTask('report')" class="btn btn-primary w-100" :disabled="taskInProgress">
+                                        <span v-if="!taskInProgress"><i class="fas fa-play me-1"></i> Generate</span>
+                                        <span v-else><i class="fas fa-spinner fa-spin me-1"></i> Processing...</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Database Backup Task -->
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-database me-2"></i>Database Backup</h5>
+                                    <p class="card-text">Create a backup of the current database state.</p>
+                                    <button @click="triggerTask('backup')" class="btn btn-primary w-100" :disabled="taskInProgress">
+                                        <span v-if="!taskInProgress"><i class="fas fa-save me-1"></i> Backup</span>
+                                        <span v-else><i class="fas fa-spinner fa-spin me-1"></i> Processing...</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Analytics Export Task -->
+                        <div class="col-md-4">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h5 class="card-title"><i class="fas fa-chart-line me-2"></i>Analytics Export</h5>
+                                    <p class="card-text">Export analytics data to CSV format.</p>
+                                    <button @click="triggerTask('analytics')" class="btn btn-primary w-100" :disabled="taskInProgress">
+                                        <span v-if="!taskInProgress"><i class="fas fa-file-export me-1"></i> Export</span>
+                                        <span v-else><i class="fas fa-spinner fa-spin me-1"></i> Processing...</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Task Status Alerts -->
+                    <div v-if="taskStatus" class="alert mt-4" :class="statusAlertClass" role="alert">
+                        <i class="fas" :class="statusIconClass"></i>
+                        <span class="ms-2">{% raw %}{{ taskStatus }}{% endraw %}</span>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </div>

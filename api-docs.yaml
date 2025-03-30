@@ -1,0 +1,233 @@
+openapi: 3.0.0
+info:
+  title: Quiz Management System API
+  description: API documentation for the Quiz Management System
+  version: 1.0.0
+
+servers:
+  - url: http://localhost:5000
+    description: Local development server
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+paths:
+  /admin/dashboard:
+    get:
+      summary: Admin Dashboard
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Admin dashboard view
+        '401':
+          description: Unauthorized access
+
+  /api/subjects:
+    get:
+      summary: Get All Subjects
+      tags: [Subjects]
+      responses:
+        '200':
+          description: List of subjects with chapter counts
+    post:
+      summary: Create New Subject
+      tags: [Subjects]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+
+  /api/subjects/{id}:
+    put:
+      summary: Update Subject
+      tags: [Subjects]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+    delete:
+      summary: Delete Subject
+      tags: [Subjects]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+
+  /api/chapters:
+    post:
+      summary: Create New Chapter
+      tags: [Chapters]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                subject_id:
+                  type: integer
+                name:
+                  type: string
+                description:
+                  type: string
+
+  /api/quizzes:
+    post:
+      summary: Create New Quiz
+      tags: [Quizzes]
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                chapter_id:
+                  type: integer
+                title:
+                  type: string
+                duration:
+                  type: integer
+                start_time:
+                  type: string
+                  format: date-time
+
+  /api/student/quizzes:
+    get:
+      summary: Get Available Quizzes for Student
+      tags: [Student]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of available quizzes
+
+  /api/student/attempts:
+    get:
+      summary: Get Student's Quiz Attempts
+      tags: [Student]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of student's quiz attempts
+
+  /api/admin/trigger-report:
+    get:
+      summary: Trigger Monthly Report Generation
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Report generation started
+
+  /api/admin/trigger-backup:
+    get:
+      summary: Trigger Database Backup
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Backup process started
+
+  /api/admin/export-analytics:
+    get:
+      summary: Export Analytics Data
+      tags: [Admin]
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Analytics export started
+
+components:
+  schemas:
+    Subject:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+        chapters_count:
+          type: integer
+
+    Quiz:
+      type: object
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        duration:
+          type: integer
+        start_time:
+          type: string
+          format: date-time
+        end_time:
+          type: string
+          format: date-time
+        questions_count:
+          type: integer
+        status:
+          type: string
+          enum: [active, inactive]
+
+    QuizAttempt:
+      type: object
+      properties:
+        id:
+          type: integer
+        quiz_id:
+          type: integer
+        score:
+          type: number
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+
+tags:
+  - name: Admin
+    description: Administrative endpoints
+  - name: Subjects
+    description: Subject management endpoints
+  - name: Chapters
+    description: Chapter management endpoints
+  - name: Quizzes
+    description: Quiz management endpoints
+  - name: Student
+    description: Student-specific endpoints

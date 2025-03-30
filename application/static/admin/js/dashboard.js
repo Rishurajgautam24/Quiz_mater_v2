@@ -37,6 +37,12 @@ new Vue({
         // UI states
         currentSection: 'subjects', // Current view section
         error: null,               // Error message storage
+
+        // Background task states
+        taskInProgress: false,
+        taskStatus: null,
+        statusAlertClass: '',
+        statusIconClass: '',
     },
     
     // --------------- Computed Properties --------------- 
@@ -301,7 +307,85 @@ new Vue({
             } else {
                 this.quizzes = [];
             }
-        }
+        },
+
+        // --------------- Background Tasks Methods --------------- 
+        async triggerTask(type) {
+            if (this.taskInProgress) return;
+            
+            this.taskInProgress = true;
+            this.taskStatus = 'Starting task...';
+            this.statusAlertClass = 'alert-info';
+            this.statusIconClass = 'fa-spinner fa-spin';
+            
+            try {
+                let endpoint;
+                let taskName;
+                switch (type) {
+                    case 'report':
+                        endpoint = '/api/admin/trigger-report';
+                        taskName = 'Monthly Report';
+                        break;
+                    case 'backup':
+                        endpoint = '/api/admin/trigger-backup';
+                        taskName = 'Database Backup';
+                        break;
+                    case 'analytics':
+                        endpoint = '/api/admin/export-analytics';
+                        taskName = 'Analytics Export';
+                        break;
+                }
+                
+                const response = await axios.get(endpoint);
+                if (response.data.task_id) {
+                    this.taskStatus = `${taskName} task started...`;
+                    this.pollTaskStatus(response.data.task_id, taskName);
+                } else {
+                    throw new Error('No task ID received');
+                }
+            } catch (error) {
+                console.error('Task error:', error);
+                this.handleTaskError(error);
+            }
+        },
+
+        async pollTaskStatus(taskId, taskName) {
+            try {
+                const response = await axios.get(`/api/task-status/${taskId}`);
+                const status = response.data;
+                
+                switch (status.state) {
+                    case 'SUCCESS':
+                        this.taskStatus = `${taskName} completed successfully!`;
+                        this.statusAlertClass = 'alert-success';
+                        this.statusIconClass = 'fa-check-circle';
+                        this.taskInProgress = false;
+                        break;
+                    case 'FAILURE':
+                        throw new Error(status.result || `${taskName} failed`);
+                    case 'PENDING':
+                        this.taskStatus = `${taskName} is pending...`;
+                        setTimeout(() => this.pollTaskStatus(taskId, taskName), 2000);
+                        break;
+                    case 'STARTED':
+                        this.taskStatus = `${taskName} is in progress...`;
+                        setTimeout(() => this.pollTaskStatus(taskId, taskName), 2000);
+                        break;
+                    default:
+                        setTimeout(() => this.pollTaskStatus(taskId, taskName), 2000);
+                }
+            } catch (error) {
+                this.handleTaskError(error);
+            }
+        },
+
+        handleTaskError(error) {
+            console.error('Task error:', error);
+            this.taskStatus = `Error: ${error.message || 'Task failed'}`;
+            this.statusAlertClass = 'alert-danger';
+            this.statusIconClass = 'fa-exclamation-circle';
+            this.taskInProgress = false;
+        },
     },
     
     // --------------- Lifecycle Hooks --------------- 
@@ -312,6 +396,9 @@ new Vue({
         document.addEventListener('keydown', this.closeModalOnEscape);
         // Make Vue instance available for debugging
         window.app = this;
+
+        // Get currentSection from URL hash or default to 'subjects'
+        this.currentSection = window.location.hash.substring(1) || 'subjects';
     },
     
     beforeDestroy() {

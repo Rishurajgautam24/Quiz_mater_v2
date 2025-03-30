@@ -7,7 +7,7 @@ A multi-user quiz application built with Flask, Vue.js, and SQLite for exam prep
 - **Backend**: Flask (Python)
 - **Frontend**: Vue.js 2.x with Bootstrap 5
 - **Database**: SQLite
-- **Caching**: Redis
+- **Caching**: RedisCache
 - **Background Jobs**: Celery with Redis broker
 - **Authentication**: Flask-Security
 - **UI Framework**: Bootstrap 5
@@ -16,25 +16,76 @@ A multi-user quiz application built with Flask, Vue.js, and SQLite for exam prep
 ## Project Structure
 
 ```
-Mad2/
-├── application/
-│   ├── static/
-│   │   ├── admin/
-│   │   │   └── js/
-│   │   ├── student/
-│   │   │   └── js/
-│   │   └── js/
-│   ├── templates/
-│   │   ├── admin/
-│   │   ├── student/
-│   │   └── base.html
-│   ├── models/
-│   ├── views.py
-│   ├── tasks.py
-│   └── __init__.py
-├── instance/
-│   └── quiz.db
-└── config.py
+└── 📁Mad2
+    └── 📁application
+        └── __init__.py
+        └── email_views.py
+        └── instance.py
+        └── mail_service.py
+        └── models.py
+        └── resources.py
+        └── sec.py
+        └── 📁static
+            └── 📁admin
+                └── 📁js
+                    └── dashboard.js
+                    └── quiz_management.js
+                    └── reports.js
+                    └── user_management.js
+            └── 📁css
+                └── style.css
+            └── 📁js
+                └── main.js
+            └── 📁student
+                └── 📁js
+                    └── dashboard.js
+                    └── quiz.js
+                    └── quizzes.js
+                    └── results.js
+        └── tasks.py
+        └── 📁templates
+            └── 📁admin
+                └── 📁templates
+                    └── dashboard.html
+                    └── 📁modals
+                        └── question_modal.html
+                        └── quiz_modal.html
+                    └── 📁partials
+                        └── sidebar.html
+                    └── quiz_management.html
+                    └── reports.html
+                    └── user_management.html
+            └── base.html
+            └── index.html
+            └── 📁student
+                └── 📁components
+                    └── navbar.html
+                └── 📁templates
+                    └── available_quizzes.html
+                    └── dashboard.html
+                    └── navbar.html
+                    └── 📁partials
+                        └── sidebar.html
+                    └── quiz.html
+                    └── quizzes.html
+                    └── results.html
+                    └── sidebar.html
+        └── views.py
+    └── 📁instance
+        └── quiz.db
+    └── .DS_Store
+    └── .gitignore
+    └── celerybeat-schedule.db
+    └── config.py
+    └── db_seeder.py
+    └── dump.rdb
+    └── main.py
+    └── make_celery.py
+    └── README.md
+    └── requirements.txt
+    └── run.sh
+    └── test_mail.py
+    └── upload_init_data.py
 ```
 
 ## Core Features
@@ -124,45 +175,6 @@ celery -A application.celery worker -B
 
 ## Detailed Redis Caching Implementation
 
-### Cache Configuration
-- **Engine**: Redis
-- **Host**: localhost
-- **Port**: 6379
-- **Database**: 0
-- **Key Prefix**: quiz_app_
-- **Default Timeout**: 300 seconds (5 minutes)
-
-### Cache Timeout Levels
-- **Short-lived (60s)**: Time-sensitive data (active quizzes, available quizzes)
-- **Medium-lived (300s)**: Semi-dynamic data (subject/chapter lists, user stats)
-- **Long-lived (3600s)**: Static reference data (system constants, configurations)
-
-### Cached Resources & Invalidation Strategy
-
-| Resource | Cache Duration | Cache Key Pattern | Invalidation Trigger |
-|----------|----------------|-------------------|----------------------|
-| Subject List | 300s | subject_list_all | Subject Create/Update/Delete |
-| Chapter List | 300s | chapter_list_subject_{id} | Chapter Create/Update/Delete |
-| Quiz List | 60s | quiz_list_chapter_{id} | Quiz Create/Update/Delete |
-| Question List | 300s | questions_quiz_{id} | Question Create/Update/Delete |
-| Available Quizzes | 60s | available_quizzes | Quiz Status Changes |
-| Student Stats | 300s | student_stats_user_{id} | New Quiz Attempt |
-| Reports | 300s | report_summary_{parameters} | New Quiz Attempts |
-
-### Cache Implementation Techniques
-1. **Decorator-based Caching**: Using `@cache.cached()` for route-level caching
-2. **Memoization**: Using `@cache.memoize()` for function-level caching with parameters
-3. **Manual Invalidation**: Strategic cache clearing on data modifications
-4. **Selective Caching**: Caching expensive computations and database queries only
-
-### Caching Performance Benefits
-- Reduced database load for frequently accessed data
-- Lower response times for complex calculations (reports, statistics)
-- Better application scalability under concurrent user load
-- Consistent performance during peak usage periods
-
-## Redis Caching Implementation Details
-
 ### Cached Endpoints
 
 The application implements strategic caching using Redis for frequently accessed endpoints:
@@ -213,6 +225,65 @@ The implemented caching strategy provides:
 - Average response time improvement of 100-200ms
 - Reduced server load during peak usage
 - Better concurrent user handling
+
+## Background Tasks Implementation
+
+### Task Directories
+Tasks create and manage the following directories in the application root:
+- `reports/` - Contains generated monthly reports (JSON)
+- `backups/` - Stores database backup files
+- `exports/` - Contains analytics export files
+
+### Available Tasks
+
+1. **Monthly Report Generation**
+   - Endpoint: `/api/admin/trigger-report`
+   - Creates: `reports/monthly_report_YYYYMMDD_HHMMSS.json`
+   - Status: Tracked through task ID
+
+2. **Database Backup**
+   - Endpoint: `/api/admin/trigger-backup`
+   - Creates: `backups/db_backup_YYYYMMDD_HHMMSS.sqlite`
+   - Uses: Safe file copy with shutil.copy2
+
+3. **Analytics Export**
+   - Endpoint: `/api/admin/export-analytics`
+   - Creates: `exports/analytics_YYYYMMDD_HHMMSS.json`
+   - Includes: User metrics and quiz statistics
+
+### Task Status Tracking
+- Endpoint: `/api/task-status/<task_id>`
+- States: PENDING, STARTED, SUCCESS, FAILURE
+- Real-time status updates via polling
+
+### Redis Configuration
+```python
+# celeryconfig.py
+broker_url = 'redis://localhost:6379/0'
+result_backend = 'redis://localhost:6379/0'
+task_serializer = 'json'
+result_serializer = 'json'
+accept_content = ['json']
+enable_utc = True
+worker_hijack_root_logger = False
+task_track_started = True
+```
+
+### Running Tasks
+1. Start Redis server:
+```bash
+redis-server
+```
+
+2. Start Celery worker:
+```bash
+celery -A application.celery worker --loglevel=info
+```
+
+3. Monitor tasks:
+```bash
+celery -A application.celery events
+```
 
 ## API Endpoints
 
@@ -367,5 +438,3 @@ MAIL_USERNAME = None
 MAIL_PASSWORD = None
 MAIL_DEFAULT_SENDER = 'quiz-master@example.com'
 ```
-
-# Quiz_mater_v2

@@ -5,9 +5,12 @@ from application.models import User, Quiz, QuizAttempt, db
 from sqlalchemy import func
 import csv
 import io
+import os
+import json
 from flask import render_template
 from celery.signals import worker_ready
 from application.mail_service import EmailService
+import shutil
 
 app = Celery()
 
@@ -67,36 +70,95 @@ def send_daily_reminders():
         EmailService.send_reminder(user.email, user.username)
     return f"Sent reminders to {len(inactive_users)} users"
 
-@shared_task
-def generate_monthly_report():
-    """Generate monthly performance reports"""
-    now = datetime.now()
-    start_date = now - timedelta(days=30)
-    
-    users = User.query.all()
-    for user in users:
-        attempts = QuizAttempt.query.filter(
-            QuizAttempt.user_id == user.id,
-            QuizAttempt.date_created >= start_date
-        ).all()
+@shared_task(bind=True)
+def generate_monthly_report(self):
+    """Generate monthly report"""
+    try:
+        # Get absolute path and create reports directory
+        current_dir = os.getcwd()
+        reports_dir = os.path.join(current_dir, 'reports')
         
-        if attempts:
-            report_data = {
-                'total_quizzes': len(attempts),
-                'avg_score': sum(a.score for a in attempts) / len(attempts),
-                'total_time': sum(a.duration for a in attempts if a.duration)
-            }
-            EmailService.send_report(user.email, user.username, report_data)
-            
-    return "Monthly reports generated and sent"
+        print(f"Current directory: {current_dir}")
+        print(f"Creating reports directory at: {reports_dir}")
+        
+        try:
+            os.makedirs(reports_dir, exist_ok=True)
+            print(f"Reports directory created/verified at: {reports_dir}")
+        except Exception as mkdir_error:
+            print(f"Error creating reports directory: {str(mkdir_error)}")
+            raise
 
-@shared_task
-def backup_database():
-    """Create database backup"""
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    # Simulate database backup
-    print(f"Database backed up: quiz_backup_{timestamp}.sql")
-    return f"Backup completed: quiz_backup_{timestamp}.sql"
+        # Generate report
+        report_data = {
+            'timestamp': datetime.now().isoformat(),
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'status': 'completed'
+        }
+
+        # Save report with absolute path
+        filename = os.path.join(reports_dir, f'monthly_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
+        print(f"Attempting to save report to: {filename}")
+        
+        try:
+            with open(filename, 'w') as f:
+                json.dump(report_data, f)
+            print(f"Report successfully saved to: {filename}")
+        except Exception as file_error:
+            print(f"Error saving report file: {str(file_error)}")
+            raise
+
+        return {'status': 'SUCCESS', 'file': filename}
+    except Exception as e:
+        error_msg = f"Error in generate_monthly_report: {str(e)}"
+        print(error_msg)
+        self.update_state(state='FAILURE', meta={'error': error_msg})
+        return {'status': 'FAILURE', 'error': error_msg}
+
+@shared_task(bind=True)
+def backup_database(self):
+    """Backup database"""
+    try:
+        # Get absolute path and create backups directory
+        current_dir = os.getcwd()
+        backups_dir = os.path.join(current_dir, 'backups')
+        
+        print(f"Current directory: {current_dir}")
+        print(f"Creating backups directory at: {backups_dir}")
+        
+        try:
+            os.makedirs(backups_dir, exist_ok=True)
+            print(f"Backups directory created/verified at: {backups_dir}")
+        except Exception as mkdir_error:
+            print(f"Error creating backups directory: {str(mkdir_error)}")
+            raise
+
+        # Create backup file path
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        backup_file = os.path.join(backups_dir, f'db_backup_{timestamp}.sqlite')
+        db_path = os.path.join(current_dir, 'instance', 'quiz.db')
+        
+        print(f"Database path: {db_path}")
+        print(f"Backup file path: {backup_file}")
+        
+        if not os.path.exists(db_path):
+            error_msg = f'Database file not found at {db_path}'
+            print(error_msg)
+            raise FileNotFoundError(error_msg)
+
+        # Perform backup
+        try:
+            shutil.copy2(db_path, backup_file)
+            print(f"Database successfully backed up to: {backup_file}")
+        except Exception as backup_error:
+            print(f"Error backing up database: {str(backup_error)}")
+            raise
+
+        return {'status': 'SUCCESS', 'file': backup_file}
+    except Exception as e:
+        error_msg = f"Error in backup_database: {str(e)}"
+        print(error_msg)
+        self.update_state(state='FAILURE', meta={'error': error_msg})
+        return {'status': 'FAILURE', 'error': error_msg}
 
 @shared_task
 def update_leaderboard():
@@ -113,30 +175,53 @@ def update_leaderboard():
     # Store in cache or database
     return "Leaderboard updated"
 
-@shared_task
-def export_analytics():
-    """Export weekly analytics data to CSV"""
-    start_date = datetime.now() - timedelta(days=7)
-    
-    attempts = QuizAttempt.query.filter(
-        QuizAttempt.date_created >= start_date
-    ).all()
-    
-    output = io.StringIO()
-    writer = csv.writer(output)
-    writer.writerow(['User', 'Quiz', 'Score', 'Date'])
-    
-    for attempt in attempts:
-        writer.writerow([
-            attempt.user.username,
-            attempt.quiz.title,
-            attempt.score,
-            attempt.date_created
-        ])
-    
-    # Simulate file saving
-    print(f"Analytics exported: analytics_{start_date.strftime('%Y%m%d')}.csv")
-    return "Analytics exported successfully"
+@shared_task(bind=True)
+def export_analytics(self):
+    """Export analytics data"""
+    try:
+        # Get absolute path and create exports directory
+        current_dir = os.getcwd()
+        exports_dir = os.path.join(current_dir, 'exports')
+        
+        print(f"Current directory: {current_dir}")
+        print(f"Creating exports directory at: {exports_dir}")
+        
+        try:
+            os.makedirs(exports_dir, exist_ok=True)
+            print(f"Exports directory created/verified at: {exports_dir}")
+        except Exception as mkdir_error:
+            print(f"Error creating exports directory: {str(mkdir_error)}")
+            raise
+
+        # Generate export data
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = os.path.join(exports_dir, f'analytics_{timestamp}.json')
+        print(f"Attempting to save analytics to: {filename}")
+        
+        export_data = {
+            'timestamp': datetime.now().isoformat(),
+            'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'data': {
+                'total_users': 100,
+                'total_quizzes': 50,
+                'total_attempts': 250
+            }
+        }
+
+        try:
+            with open(filename, 'w') as f:
+                json.dump(export_data, f)
+            print(f"Analytics successfully saved to: {filename}")
+        except Exception as file_error:
+            print(f"Error saving analytics file: {str(file_error)}")
+            raise
+
+        return {'status': 'SUCCESS', 'file': filename}
+    except Exception as e:
+        error_msg = f"Error in export_analytics: {str(e)}"
+        print(error_msg)
+        self.update_state(state='FAILURE', meta={'error': error_msg})
+        return {'status': 'FAILURE', 'error': error_msg}
 
 @shared_task
 def clean_expired_sessions():

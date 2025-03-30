@@ -9,6 +9,7 @@ from sqlalchemy import case, func
 from datetime import datetime, timedelta
 from application.tasks import generate_monthly_report, backup_database, export_analytics
 from .instance import cache
+import os
 
 # ------------- Admin Dashboard Routes -------------
 @app.route('/admin/dashboard')
@@ -38,6 +39,13 @@ def reports():
     if not current_user.is_authenticated:
         return redirect(url_for('index'))
     return render_template('admin/templates/reports.html')
+
+@app.route('/admin/tasks')
+@roles_required('admin')
+def admin_tasks():
+    if not current_user.is_authenticated:
+        return redirect(url_for('index'))
+    return render_template('admin/templates/tasks.html')
 
 # ------------- Student Dashboard Routes -------------
 @app.route('/student/dashboard')
@@ -727,25 +735,45 @@ def report_time_series():
 def trigger_report():
     """Manually trigger monthly report generation"""
     try:
+        # Create necessary directories
+        os.makedirs('reports', exist_ok=True)
+        
+        # Start task
         task = generate_monthly_report.delay()
+        
+        if not task.id:
+            raise Exception("Failed to start task")
+            
         return jsonify({
+            'status': 'SUCCESS',
             'message': 'Report generation started',
             'task_id': task.id
         })
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        app.logger.error(f"Error triggering report: {str(e)}")
+        return jsonify({
+            'status': 'ERROR',
+            'error': str(e)
+        }), 500
 
 @app.route('/api/admin/trigger-backup')
 @roles_required('admin')
 def trigger_backup():
     """Manually trigger database backup"""
     try:
+        # Create necessary directories if they don't exist
+        os.makedirs('backups', exist_ok=True)
+        
+        # Start the task
         task = backup_database.delay()
+        app.logger.info(f"Started backup task: {task.id}")
+        
         return jsonify({
             'message': 'Backup started',
             'task_id': task.id
         })
     except Exception as e:
+        app.logger.error(f"Error triggering backup: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/export-analytics')
@@ -753,25 +781,51 @@ def trigger_backup():
 def trigger_analytics_export():
     """Manually trigger analytics export"""
     try:
+        # Create necessary directories if they don't exist
+        os.makedirs('exports', exist_ok=True)
+        
+        # Start the task
         task = export_analytics.delay()
+        app.logger.info(f"Started analytics export task: {task.id}")
+        
         return jsonify({
             'message': 'Analytics export started',
             'task_id': task.id
         })
     except Exception as e:
+        app.logger.error(f"Error triggering analytics export: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/task-status/<task_id>')
 @roles_required('admin')
 def get_task_status(task_id):
     """Check status of a Celery task"""
-    from celery.result import AsyncResult
-    task = AsyncResult(task_id)
-    return jsonify({
-        'task_id': task_id,
-        'state': task.state,
-        'result': task.result if task.ready() else None
-    })
+    try:
+        from celery.result import AsyncResult
+        task = AsyncResult(task_id)
+        
+        response = {
+            'task_id': task_id,
+            'state': task.state,
+            'info': None
+        }
+        
+        if task.state == 'PENDING':
+            response['info'] = 'Task is pending...'
+        elif task.state == 'SUCCESS':
+            response['info'] = task.get()
+        elif task.state == 'FAILURE':
+            response['info'] = str(task.result)
+        else:
+            response['info'] = 'Task is in progress...'
+            
+        return jsonify(response)
+    except Exception as e:
+        app.logger.error(f"Error checking task status: {str(e)}")
+        return jsonify({
+            'status': 'ERROR',
+            'error': str(e)
+        }), 500
 
 # ------------- Student Quiz API Routes -------------
 @app.route('/student/quiz/<int:quiz_id>')
