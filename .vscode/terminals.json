@@ -1,0 +1,29 @@
+{
+    "terminals": [
+        {
+            "name": "Redis Server",
+            "command": "redis-server",
+            "focus": true
+        },
+        {
+            "name": "Flask App",
+            "command": "python main.py",
+            "focus": false
+        },
+        {
+            "name": "Celery Worker",
+            "command": "celery -A make_celery:celery_app worker --loglevel=INFO",
+            "focus": false
+        },
+        {
+            "name": "Celery Beat",
+            "command": "celery -A make_celery:celery_app beat --loglevel=INFO",
+            "focus": false
+        },
+        {
+            "name": "Mailhog",
+            "command": "mailhog",
+            "focus": false
+        }
+    ]
+}

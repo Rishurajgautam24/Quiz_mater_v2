@@ -11,9 +11,23 @@ from werkzeug.security import generate_password_hash
 from flask_caching import Cache
 import uuid
 from datetime import datetime
+from celery import Celery, Task
+from application.instance import cache
 
-# Initialize extensions
-cache = Cache()
+
+
+def create_celery():
+    _celery = Celery(
+        'mad2',
+        broker='redis://localhost',
+        backend='redis://localhost',
+        include=['application.tasks']
+    )
+    # Add broker connection retry setting
+    _celery.conf.broker_connection_retry_on_startup = True
+    return _celery
+
+celery = create_celery()
 
 def create_app():
     # ------------ App Configuration -----------
@@ -22,15 +36,25 @@ def create_app():
                 static_folder='application/static')
     app.config.from_object(DevelopmentConfig)
     
+    # Store Celery instance in extensions
+    app.extensions['celery'] = celery
+    
+    # Configure Celery with app context
+    class ContextTask(celery.Task):
+        def __call__(self, *args, **kwargs):
+            with app.app_context():
+                return self.run(*args, **kwargs)
+    
+    celery.Task = ContextTask
+    
     # ------------ Extensions Initialization -----------
     db.init_app(app)
     api.init_app(app)
-    cache.init_app(app)  # Simplified cache initialization
+    cache.init_app(app)
     datastore = SQLAlchemyUserDatastore(db, User, Role)
     app.security = Security(app, datastore)
     
-    # Make cache available globally
-    app.extensions['cache'] = cache
+
     
     with app.app_context():
         # ------------ Database Setup -----------

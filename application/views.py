@@ -7,6 +7,8 @@ from application.models import User, Role
 from uuid import uuid4
 from sqlalchemy import case, func
 from datetime import datetime, timedelta
+from application.tasks import generate_monthly_report, backup_database, export_analytics
+from .instance import cache
 
 # ------------- Admin Dashboard Routes -------------
 @app.route('/admin/dashboard')
@@ -70,6 +72,7 @@ def get_current_user():
 
 # ------------- Subject API Routes -------------
 @app.route('/api/subjects', methods=['GET'])
+@cache.cached(timeout=300)  # Cache subject list for 5 minutes
 def get_subjects():
     """Get All Subjects With Their Chapter Counts"""
     subjects = Subject.query.all()
@@ -127,6 +130,7 @@ def delete_subject(id):
 
 # ------------- Chapter API Routes -------------
 @app.route('/api/subjects/<int:subject_id>/chapters', methods=['GET'])
+@cache.cached(timeout=300)  # Cache chapter list for 5 minutes
 def get_chapters(subject_id):
     chapters = Chapter.query.filter_by(subject_id=subject_id).all()
     return jsonify([{
@@ -188,6 +192,7 @@ def delete_chapter(id):
 
 # ------------- Quiz API Routes -------------
 @app.route('/api/chapters/<int:chapter_id>/quizzes', methods=['GET'])
+@cache.cached(timeout=60)  # Cache quiz list for 1 minute since it changes more frequently
 def get_quizzes(chapter_id):
     quizzes = Quiz.query.filter_by(chapter_id=chapter_id).all()
     current_time = datetime.now()  # Use local system time
@@ -479,6 +484,7 @@ def toggle_user_status(id):
 # ------------- Report Generation API Routes -------------
 @app.route('/api/reports/summary')
 @roles_required('admin')
+@cache.cached(timeout=300)  # Cache report summary for 5 minutes
 def report_summary():
     """Get summary statistics for reporting"""
     try:
@@ -715,6 +721,58 @@ def report_time_series():
         
         return jsonify([{'date': date_str, 'avg_score': 0, 'attempts': 0} for date_str in date_range])
 
+# ------------ Celery beats configurations -----------
+@app.route('/api/admin/trigger-report')
+@roles_required('admin')
+def trigger_report():
+    """Manually trigger monthly report generation"""
+    try:
+        task = generate_monthly_report.delay()
+        return jsonify({
+            'message': 'Report generation started',
+            'task_id': task.id
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/trigger-backup')
+@roles_required('admin')
+def trigger_backup():
+    """Manually trigger database backup"""
+    try:
+        task = backup_database.delay()
+        return jsonify({
+            'message': 'Backup started',
+            'task_id': task.id
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/admin/export-analytics')
+@roles_required('admin')
+def trigger_analytics_export():
+    """Manually trigger analytics export"""
+    try:
+        task = export_analytics.delay()
+        return jsonify({
+            'message': 'Analytics export started',
+            'task_id': task.id
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/task-status/<task_id>')
+@roles_required('admin')
+def get_task_status(task_id):
+    """Check status of a Celery task"""
+    from celery.result import AsyncResult
+    task = AsyncResult(task_id)
+    return jsonify({
+        'task_id': task_id,
+        'state': task.state,
+        'result': task.result if task.ready() else None
+    })
+
 # ------------- Student Quiz API Routes -------------
 @app.route('/student/quiz/<int:quiz_id>')
 @roles_required('stud')
@@ -838,6 +896,7 @@ def submit_quiz(quiz_id):
 
 @app.route('/api/student/available-quizzes')
 @roles_required('stud')
+@cache.cached(timeout=60)  # Cache available quizzes for 1 minute
 def get_available_quizzes():
     """Get all available quizzes for students"""
     try:
@@ -871,6 +930,7 @@ def get_available_quizzes():
 # ------------- Student Performance API Routes -------------
 @app.route('/api/student/stats')
 @roles_required('stud')
+@cache.memoize(timeout=300)  # Cache per-user stats for 5 minutes
 def get_student_stats():
     try:
         user_id = current_user.id
