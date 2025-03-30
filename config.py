@@ -2,16 +2,14 @@ class Config(object):
     DEBUG = False
     TESTING = False
 
-    # Email Configuration
-    MAIL_SERVER = 'localhost'
-    MAIL_PORT = 1025  # Mailhog SMTP port
-    MAIL_USE_TLS = False
-    MAIL_USE_SSL = False
-    MAIL_DEBUG = True
-    MAIL_USERNAME = None
-    MAIL_PASSWORD = None
-    MAIL_DEFAULT_SENDER = 'quiz-master@example.com'
-    MAIL_MAX_EMAILS = None
+    # MailHog Configuration
+    MAIL_SERVER = '0.0.0.0'  # MailHog server address
+    MAIL_PORT = 1025         # MailHog SMTP port
+    MAIL_USE_TLS = False     # MailHog doesn't need TLS
+    MAIL_USE_SSL = False     # MailHog doesn't need SSL
+    MAIL_DEBUG = True        # Enable debug mode
+    MAIL_DEFAULT_SENDER = 'quizmaster@example.com'
+    MAIL_MAX_EMAILS = None   # No limit
     MAIL_SUPPRESS_SEND = False
     MAIL_ASCII_ATTACHMENTS = False
     CACHE_TYPE = "RedisCache"
@@ -34,11 +32,11 @@ class DevelopmentConfig(Config):
     CACHE_REDIS_DB = 3
 
     # Email Configuration
-    MAIL_SERVER = 'localhost'
-    MAIL_PORT = 1025  # Mailhog SMTP port
-    MAIL_USE_TLS = False
-    MAIL_USE_SSL = False
-    MAIL_DEBUG = True
+    MAIL_SERVER = '0.0.0.0'  # MailHog server address
+    MAIL_PORT = 1025         # MailHog SMTP port
+    MAIL_USE_TLS = False     # MailHog doesn't need TLS
+    MAIL_USE_SSL = False     # MailHog doesn't need SSL
+    MAIL_DEBUG = True        # Enable debug mode
     MAIL_DEFAULT_SENDER = 'quizmaster@example.com'
 
     # Celery Configuration

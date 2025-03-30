@@ -76,15 +76,16 @@ new Vue({
                     throw new Error(response.data.error);
                 }
                 
+                // Update selectedAttempt with response data
                 this.selectedAttempt = {
                     ...this.selectedAttempt,
                     ...response.data,
-                    questions: response.data.response_sheet || []
+                    questions: response.data.response_sheet || [] // Using response_sheet for questions
                 };
                 
             } catch (error) {
-                const message = error.response?.data?.error || 'Failed to load attempt details';
-                alert(message);
+                console.error('Error fetching attempt details:', error);
+                this.error = error.response?.data?.error || 'Failed to load attempt details';
             }
         },
         

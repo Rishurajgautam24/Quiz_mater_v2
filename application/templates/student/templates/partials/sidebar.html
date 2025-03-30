@@ -17,7 +17,8 @@
             </a>
         </li>
         <li>
-            <a href="/student/results" class="nav-link text-white {% if active == 'results' %}active{% endif %}">
+            <a href="/student/results" 
+               class="nav-link text-white {% if active == 'results' %}active{% endif %}">
                 <i class="fas fa-chart-line me-2"></i>
                 Results
             </a>
@@ -27,29 +28,10 @@
     <div class="dropdown">
         <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="userDropdown" data-bs-toggle="dropdown" aria-expanded="false">
             <i class="fas fa-user-circle me-2 fs-4"></i>
-            <strong>{{ displayName }}</strong>
+            <strong v-text="username"></strong>
         </a>
         <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="userDropdown">
-            <li><a class="dropdown-item" href="#" @click="handleLogout">Sign out</a></li>
+            <li><a class="dropdown-item" href="#" @click.prevent="handleLogout">Sign out</a></li>
         </ul>
     </div>
 </div>
-
-<script>
-new Vue({
-    el: '#sidebar',
-    data: {
-        displayName: ''
-    },
-    methods: {
-        handleLogout() {
-            axios.post('/api/logout')
-                .then(() => window.location.href = '/')
-                .catch(error => console.error('Logout failed:', error));
-        }
-    },
-    mounted() {
-        this.displayName = document.querySelector('meta[name="username"]')?.content || '';
-    }
-});
-</script>

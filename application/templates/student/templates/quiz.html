@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 
 {% block content %}
+<!-- Add CSRF token meta tag -->
+<meta name="csrf-token" content="{{ csrf_token }}">
+
 <div class="d-flex">
     {% with active='quizzes' %}
     {% include 'student/templates/partials/sidebar.html' %}
@@ -30,48 +33,63 @@
                     {% raw %}{{ error }}{% endraw %}
                 </div>
 
-                <!-- Quiz Content -->
-                <div v-if="quiz && !loading" class="quiz-container">
-                    <div class="mb-4">
-                        <h4>{% raw %}{{ quiz.title }}{% endraw %}</h4>
-                        <div class="badge bg-info me-2">Duration: {% raw %}{{ quiz.duration }}{% endraw %} minutes</div>
-                        <div class="badge bg-warning">Time Left: {% raw %}{{ formatTime(timeLeft) }}{% endraw %}</div>
-                    </div>
-
-                    <!-- Questions List -->
-                    <div class="questions-list">
-                        <div v-for="(question, index) in quiz.questions" :key="question.id" class="card mb-3">
-                            <div class="card-body">
-                                <h5 class="card-title">Question {% raw %}{{ index + 1 }}{% endraw %}</h5>
-                                <p class="card-text">{% raw %}{{ question.text }}{% endraw %}</p>
-                                
-                                <!-- Options -->
-                                <div class="options-list">
-                                    <div v-for="(option, optIndex) in question.options" :key="optIndex" class="form-check mb-2">
-                                        <input class="form-check-input" type="radio"
-                                               :name="'question_' + question.id"
-                                               :id="'option_' + question.id + '_' + optIndex"
-                                               :value="optIndex"
-                                               v-model="answers[question.id]">
-                                        <label class="form-check-label" :for="'option_' + question.id + '_' + optIndex">
-                                            {% raw %}{{ option }}{% endraw %}
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <div class="badge bg-secondary">Marks: {% raw %}{{ question.marks }}{% endraw %}</div>
-                            </div>
+                <!-- Error Toast -->
+                <div v-if="error" class="position-fixed bottom-0 end-0 p-3" style="z-index: 11">
+                    <div class="toast show" role="alert">
+                        <div class="toast-header bg-danger text-white">
+                            <strong class="me-auto">Error</strong>
+                            <button type="button" class="btn-close" @click="error = null"></button>
+                        </div>
+                        <div class="toast-body">
+                            {% raw %}{{ error }}{% endraw %}
                         </div>
                     </div>
-
-                    <!-- Submit Button -->
-                    <div class="text-center mt-4">
-                        <button @click="submitQuiz" class="btn btn-primary btn-lg" :disabled="submitting">
-                            <span v-if="submitting" class="spinner-border spinner-border-sm me-2"></span>
-                            {% raw %}{{ submitting ? 'Submitting...' : 'Submit Quiz' }}{% endraw %}
-                        </button>
-                    </div>
                 </div>
+
+                <!-- Quiz Content -->
+                <form id="quiz-form" @submit.prevent="submitQuiz">
+                    <div v-if="quiz && !loading" class="quiz-container">
+                        <div class="mb-4">
+                            <h4>{% raw %}{{ quiz.title }}{% endraw %}</h4>
+                            <div class="badge bg-info me-2">Duration: {% raw %}{{ quiz.duration }}{% endraw %} minutes</div>
+                            <div class="badge bg-warning">Time Left: {% raw %}{{ formatTime(timeLeft) }}{% endraw %}</div>
+                        </div>
+
+                        <!-- Questions List -->
+                        <div class="questions-list">
+                            <div v-for="(question, index) in quiz.questions" :key="question.id" class="card mb-3">
+                                <div class="card-body">
+                                    <h5 class="card-title">Question {% raw %}{{ index + 1 }}{% endraw %}</h5>
+                                    <p class="card-text">{% raw %}{{ question.text }}{% endraw %}</p>
+                                    
+                                    <!-- Options -->
+                                    <div class="options-list">
+                                        <div v-for="(option, optIndex) in question.options" :key="optIndex" class="form-check mb-2">
+                                            <input class="form-check-input" type="radio"
+                                                   :name="'question_' + question.id"
+                                                   :id="'option_' + question.id + '_' + optIndex"
+                                                   :value="optIndex"
+                                                   v-model="answers[question.id]">
+                                            <label class="form-check-label" :for="'option_' + question.id + '_' + optIndex">
+                                                {% raw %}{{ option }}{% endraw %}
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="badge bg-secondary">Marks: {% raw %}{{ question.marks }}{% endraw %}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-primary btn-lg" :disabled="submitting || timeLeft <= 0">
+                                <span v-if="submitting" class="spinner-border spinner-border-sm me-2"></span>
+                                {% raw %}{{ submitting ? 'Submitting...' : 'Submit Quiz' }}{% endraw %}
+                            </button>
+                        </div>
+                    </div>
+                </form>
 
                 <!-- Results Modal -->
                 <div class="modal" :class="{'show d-block': showResults}" tabindex="-1">
@@ -87,6 +105,7 @@
                                 </div>
                             </div>
                             <div class="modal-footer">
+                                <button @click="retakeQuiz" class="btn btn-secondary me-2">Retake Quiz</button>
                                 <a href="/student/quizzes" class="btn btn-primary">Back to Quizzes</a>
                             </div>
                         </div>
@@ -99,8 +118,9 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="{{ url_for('static', filename='js/sidebar.js') }}"></script>
 <script>
-new Vue({
+const app = new Vue({
     el: '#app',
     data: {
         quiz: null,
@@ -112,7 +132,8 @@ new Vue({
         submitting: false,
         showResults: false,
         results: null,
-        displayName: ''  // Add this
+        displayName: '',
+        username: document.querySelector('meta[name="username"]')?.content || ''
     },
     methods: {
         async fetchQuiz() {
@@ -122,7 +143,18 @@ new Vue({
                 this.timeLeft = this.quiz.duration * 60;
                 this.startTimer();
             } catch (error) {
-                this.error = 'Failed to load quiz. Please check your connection or try again later.';
+                // Handle specific error cases
+                if (error.response) {
+                    if (error.response.status === 403) {
+                        this.error = error.response.data.error || 'You are not authorized to access this quiz';
+                    } else if (error.response.status === 401) {
+                        window.location.href = '/';  // Redirect to login if not authenticated
+                    } else {
+                        this.error = error.response.data.error || 'Failed to load quiz';
+                    }
+                } else {
+                    this.error = 'Failed to connect to server. Please check your connection.';
+                }
                 console.error('Error loading quiz:', error);
             } finally {
                 this.loading = false;
@@ -160,18 +192,26 @@ new Vue({
                 this.submitting = false;
             }
         },
-        handleLogout() {  // Add this
+        handleLogout() {
             axios.post('/api/logout')
                 .then(() => window.location.href = '/')
                 .catch(error => {
                     console.error('Logout failed:', error);
                     this.error = 'Error logging out';
                 });
+        },
+        retakeQuiz() {
+            this.showResults = false;
+            this.answers = {};
+            this.results = null;
+            this.fetchQuiz();
         }
     },
     mounted() {
         this.fetchQuiz();
-        this.displayName = document.querySelector('meta[name="username"]')?.content || '';  // Add this
+        this.displayName = document.querySelector('meta[name="username"]')?.content || '';
+        // Initialize sidebar
+        window.initSidebar(this.username);
     },
     beforeDestroy() {
         if (this.timer) {
@@ -179,5 +219,8 @@ new Vue({
         }
     }
 });
+
+// Add debug for CSRF token
+console.log("CSRF Token available:", document.querySelector('meta[name="csrf-token"]')?.content);
 </script>
 {% endblock %}

@@ -17,21 +17,28 @@ class EmailService:
             msg['From'] = current_app.config['MAIL_DEFAULT_SENDER']
             msg['To'] = to_email
 
-            # Add text/plain and text/html parts
             if text_content:
                 msg.attach(MIMEText(text_content, 'plain'))
             msg.attach(MIMEText(html_content, 'html'))
 
-            # Connect to SMTP server
-            with smtplib.SMTP(
-                current_app.config['MAIL_SERVER'],
-                current_app.config['MAIL_PORT']
-            ) as smtp:
+            # Get mail settings with defaults for MailHog
+            mail_server = current_app.config.get('MAIL_SERVER', 'localhost')
+            mail_port = current_app.config.get('MAIL_PORT', 1025)
+            
+            print(f"Attempting to connect to SMTP server: {mail_server}:{mail_port}")
+
+            # Connect to MailHog SMTP server
+            with smtplib.SMTP(mail_server, mail_port) as smtp:
+                # MailHog doesn't require authentication
+                print(f"Connected to SMTP server, sending email to {to_email}")
                 smtp.send_message(msg)
-                logger.info(f"Email sent to {to_email}")
+                print(f"Email sent successfully to {to_email}")
+                logger.info(f"Email sent to {to_email} via MailHog")
                 return True
+                
         except Exception as e:
-            logger.error(f"Failed to send email: {str(e)}")
+            print(f"Failed to send email: {str(e)}")
+            logger.error(f"Failed to send email via MailHog: {str(e)}")
             return False
 
     @staticmethod

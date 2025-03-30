@@ -1,3 +1,7 @@
+// Configure Axios defaults
+axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.content;
+axios.defaults.withCredentials = true;
+
 new Vue({
     el: '#app',
     

@@ -78,36 +78,77 @@ def generate_monthly_report(self):
         current_dir = os.getcwd()
         reports_dir = os.path.join(current_dir, 'reports')
         
-        print(f"Current directory: {current_dir}")
-        print(f"Creating reports directory at: {reports_dir}")
-        
         try:
             os.makedirs(reports_dir, exist_ok=True)
-            print(f"Reports directory created/verified at: {reports_dir}")
         except Exception as mkdir_error:
             print(f"Error creating reports directory: {str(mkdir_error)}")
             raise
 
-        # Generate report
+        # Get all active users and generate their reports
+        users = User.query.filter_by(active=True).all()
+        emails_sent = 0
+        email_failures = []
+        
+        print(f"Found {len(users)} active users to process")
+        
+        for user in users:
+            try:
+                # Calculate user statistics for the past month
+                last_month = datetime.now() - timedelta(days=30)
+                user_attempts = QuizAttempt.query.filter(
+                    QuizAttempt.user_id == user.id,
+                    QuizAttempt.date_created >= last_month
+                ).all()
+                
+                if user_attempts:
+                    print(f"Preparing report for user {user.email}")
+                    report_data = {
+                        'total_quizzes': len(user_attempts),
+                        'avg_score': round(sum(a.score for a in user_attempts) / len(user_attempts), 2),
+                        'total_time': sum(a.duration or 0 for a in user_attempts)
+                    }
+                    
+                    print(f"Attempting to send email to {user.email}")
+                    # Send email report with better error handling
+                    success = EmailService.send_report(user.email, user.username, report_data)
+                    if success:
+                        emails_sent += 1
+                        print(f"Successfully sent email to {user.email}")
+                    else:
+                        email_failures.append(user.email)
+                        print(f"Failed to send email to {user.email}")
+                    
+                    # Add a small delay between emails
+                    from time import sleep
+                    sleep(1)
+                    
+            except Exception as e:
+                print(f"Error processing user {user.email}: {str(e)}")
+                email_failures.append(user.email)
+
+        # Generate summary report
         report_data = {
             'timestamp': datetime.now().isoformat(),
             'generated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-            'status': 'completed'
+            'status': 'completed',
+            'emails_sent': emails_sent,
+            'email_failures': email_failures,
+            'total_users': len(users)
         }
 
-        # Save report with absolute path
         filename = os.path.join(reports_dir, f'monthly_report_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
-        print(f"Attempting to save report to: {filename}")
         
-        try:
-            with open(filename, 'w') as f:
-                json.dump(report_data, f)
-            print(f"Report successfully saved to: {filename}")
-        except Exception as file_error:
-            print(f"Error saving report file: {str(file_error)}")
-            raise
+        with open(filename, 'w') as f:
+            json.dump(report_data, f)
+            print(f"Report saved to: {filename}")
 
-        return {'status': 'SUCCESS', 'file': filename}
+        return {
+            'status': 'SUCCESS',
+            'file': filename,
+            'emails_sent': emails_sent,
+            'email_failures': email_failures,
+            'total_users': len(users)
+        }
     except Exception as e:
         error_msg = f"Error in generate_monthly_report: {str(e)}"
         print(error_msg)

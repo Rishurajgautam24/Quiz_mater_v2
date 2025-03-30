@@ -1,3 +1,8 @@
+// Setup Axios defaults
+axios.defaults.headers.common['X-CSRF-TOKEN'] = document.querySelector('meta[name="csrf-token"]')?.content;
+axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
+axios.defaults.withCredentials = true;
+
 new Vue({
     el: '#app',
     
@@ -27,7 +32,8 @@ new Vue({
             score: 0,           // Percentage score
             total_marks: 0,     // Total available marks
             scored_marks: 0     // Marks obtained
-        }
+        },
+        showResults: false       // Property to manage result visibility
     },
     
     // --------------- Methods --------------- 
@@ -88,47 +94,41 @@ new Vue({
             clearInterval(this.timer);
             
             try {
-                console.log("Questions:", this.questions);
-                
-                // Process answers before submission
-                const processedAnswers = {};
-                for (const [questionId, answer] of Object.entries(this.answers)) {
-                    if (answer !== null && answer !== undefined) {
-                        const question = this.questions.find(q => q.id === parseInt(questionId));
-                        if (question && question.options) {
-                            // Store option index directly
-                            const answerIndex = question.options.indexOf(answer);
-                            console.log(`Processing answer for question ${questionId}:`, {
-                                answer,
-                                answerIndex,
-                                options: question.options
-                            });
-                            processedAnswers[questionId] = answerIndex;
-                        }
-                    }
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.content;
+                if (!csrfToken) {
+                    throw new Error('CSRF token not found');
                 }
-                
-                console.log("Submitting processed answers:", processedAnswers);
-                
-                const response = await axios.post(`/api/student/quiz/${this.quizId}/submit`, {
-                    answers: processedAnswers
+
+                // Validate answers before submission
+                if (Object.keys(this.answers).length === 0) {
+                    throw new Error('Please answer at least one question before submitting');
+                }
+
+                const response = await axios({
+                    method: 'POST',
+                    url: `/api/student/quiz/${this.quizId}/submit`,
+                    data: { answers: this.answers },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken
+                    }
                 });
-                
-                console.log("Submission response:", response.data);
-                
+
                 if (response.data.error) {
                     throw new Error(response.data.error);
                 }
-                
+
                 this.result = response.data;
-                
-                // Show results modal
-                const resultModal = new bootstrap.Modal(document.getElementById('resultModal'));
-                resultModal.show();
+                this.showResults = true;
+
             } catch (error) {
-                console.error('Error submitting quiz:', error);
-                this.error = error.response?.data?.error || error.message || 'Failed to submit quiz. Please try again.';
-                alert(this.error);
+                console.error('Quiz submission error:', error);
+                this.error = error.response?.data?.error || error.message;
+                
+                if (error.response?.status === 403) {
+                    // Redirect to quizzes page after 3 seconds if unauthorized
+                    setTimeout(() => window.location.href = '/student/quizzes', 3000);
+                }
             } finally {
                 this.isSubmitting = false;
             }

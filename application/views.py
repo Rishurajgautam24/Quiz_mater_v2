@@ -9,6 +9,7 @@ from sqlalchemy import case, func
 from datetime import datetime, timedelta
 from application.tasks import generate_monthly_report, backup_database, export_analytics
 from .instance import cache
+from flask_wtf.csrf import generate_csrf
 import os
 
 # ------------- Admin Dashboard Routes -------------
@@ -233,7 +234,6 @@ def create_quiz():
                 # Convert "YYYY-MM-DDTHH:MM" to datetime object
                 start_time = datetime.strptime(date_str, "%Y-%m-%dT%H:%M")
             except Exception as e:
-                app.logger.error(f"Error parsing start_time: {str(e)}")
                 start_time = datetime.now()
                 
         # Calculate end time based on duration in minutes
@@ -261,7 +261,6 @@ def create_quiz():
         }), 201
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error creating quiz: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/quizzes/<int:id>', methods=['PUT'])
@@ -290,7 +289,6 @@ def update_quiz(id):
                 # Recalculate end_time based on start_time + duration
                 quiz.end_time = start_time + timedelta(minutes=quiz.duration)
             except Exception as e:
-                app.logger.error(f"Error parsing start_time for update: {str(e)}")
                 return jsonify({'error': f"Invalid start time format: {str(e)}"}), 400
             
         db.session.commit()
@@ -309,7 +307,6 @@ def update_quiz(id):
         })
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error updating quiz: {str(e)}")
         return jsonify({'error': str(e)}), 400
 
 @app.route('/api/quizzes/<int:id>', methods=['DELETE'])
@@ -332,7 +329,6 @@ def delete_quiz(id):
         return jsonify({'message': 'Quiz deleted successfully'})
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error deleting quiz {id}: {str(e)}")
         return jsonify({'error': 'Failed to delete quiz'}), 500
 
 # ------------- Question API Routes -------------
@@ -559,7 +555,6 @@ def report_summary():
             'totalQuizzes': total_quizzes
         })
     except Exception as e:
-        app.logger.error(f"Error generating summary report: {str(e)}")
         return jsonify({
             'totalAttempts': 0,
             'averageScore': 0,
@@ -631,7 +626,6 @@ def report_quiz_activity():
         
         return jsonify(formatted_results)
     except Exception as e:
-        app.logger.error(f"Error generating quiz activity report: {str(e)}")
         return jsonify([])
 
 @app.route('/api/reports/time-series')
@@ -710,7 +704,6 @@ def report_time_series():
         
         return jsonify(time_data)
     except Exception as e:
-        app.logger.error(f"Error generating time series report: {str(e)}")
         # Return empty data for the requested range
         from datetime import datetime, timedelta
         today = datetime.now().date()
@@ -746,14 +739,13 @@ def trigger_report():
             
         return jsonify({
             'status': 'SUCCESS',
-            'message': 'Report generation started',
+            'message': 'Report generation and email dispatch started. Check MailHog for sent emails.',
             'task_id': task.id
         })
     except Exception as e:
-        app.logger.error(f"Error triggering report: {str(e)}")
         return jsonify({
             'status': 'ERROR',
-            'error': str(e)
+            'error': f"Failed to generate report: {str(e)}"
         }), 500
 
 @app.route('/api/admin/trigger-backup')
@@ -766,14 +758,12 @@ def trigger_backup():
         
         # Start the task
         task = backup_database.delay()
-        app.logger.info(f"Started backup task: {task.id}")
         
         return jsonify({
             'message': 'Backup started',
             'task_id': task.id
         })
     except Exception as e:
-        app.logger.error(f"Error triggering backup: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/admin/export-analytics')
@@ -786,14 +776,12 @@ def trigger_analytics_export():
         
         # Start the task
         task = export_analytics.delay()
-        app.logger.info(f"Started analytics export task: {task.id}")
         
         return jsonify({
             'message': 'Analytics export started',
             'task_id': task.id
         })
     except Exception as e:
-        app.logger.error(f"Error triggering analytics export: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/task-status/<task_id>')
@@ -821,7 +809,6 @@ def get_task_status(task_id):
             
         return jsonify(response)
     except Exception as e:
-        app.logger.error(f"Error checking task status: {str(e)}")
         return jsonify({
             'status': 'ERROR',
             'error': str(e)
@@ -844,109 +831,124 @@ def take_quiz(quiz_id):
             
         return render_template('student/templates/quiz.html', quiz=quiz)
     except Exception as e:
-        app.logger.error(f"Error accessing quiz: {str(e)}")
         return redirect(url_for('student_quizzes'))
 
 @app.route('/api/student/quiz/<int:quiz_id>', methods=['GET'])
 @roles_required('stud')
 def get_quiz_details(quiz_id):
-    quiz = Quiz.query.get_or_404(quiz_id)
-    
-    # Check if quiz is active
-    if not quiz.is_active:
-        return jsonify({'error': 'Quiz is not currently available'}), 403
+    """Get quiz details for students"""
+    try:
+        if not current_user.is_authenticated:
+            return jsonify({'error': 'Authentication required'}), 401
+            
+        quiz = Quiz.query.get_or_404(quiz_id)
         
-    questions = Question.query.filter_by(quiz_id=quiz_id).all()
-    return jsonify({
-        'id': quiz.id,
-        'title': quiz.title,
-        'duration': quiz.duration,
-        'start_time': quiz.start_time.isoformat() if quiz.start_time else None,
-        'end_time': quiz.end_time.isoformat() if quiz.end_time else None,
-        'questions': [{
-            'id': q.id,
-            'text': q.question_text,
-            'options': q.options,
-            'marks': q.marks
-        } for q in questions]
-    })
+        # Check if quiz exists and is active
+        if not quiz:
+            return jsonify({'error': 'Quiz not found'}), 404
+            
+        # Check if quiz is currently active
+        now = datetime.now()
+        if not (quiz.start_time <= now <= quiz.end_time):
+            return jsonify({'error': 'Quiz is not currently available'}), 403
+            
+        questions = Question.query.filter_by(quiz_id=quiz_id).all()
+        return jsonify({
+            'id': quiz.id,
+            'title': quiz.title,
+            'duration': quiz.duration,
+            'questions': [{
+                'id': q.id,
+                'text': q.question_text,
+                'options': q.options,
+                'marks': q.marks
+            } for q in questions]
+        })
+        
+    except Exception as e:
+        return jsonify({'error': 'Failed to load quiz'}), 500
 
 @app.route('/api/student/quiz/<int:quiz_id>/submit', methods=['POST'])
 @roles_required('stud')
 def submit_quiz(quiz_id):
-    from datetime import datetime
-    
     try:
+        if not request.is_json:
+            return jsonify({'error': 'Invalid content type, expected JSON'}), 400
+            
         data = request.get_json()
         if not data or 'answers' not in data:
             return jsonify({'error': 'No answers provided'}), 400
-            
+
+        # Verify quiz exists and user can access it
         quiz = Quiz.query.get_or_404(quiz_id)
-        
-        # Check if quiz is still active
-        if not quiz.is_active:
+        now = datetime.now()
+
+        # Validate quiz timing
+        if now < quiz.start_time:
+            return jsonify({'error': 'Quiz has not started yet'}), 403
+        if now > quiz.end_time:
             return jsonify({'error': 'Quiz has expired'}), 403
-            
+
+        # Process answers and calculate score
         questions = Question.query.filter_by(quiz_id=quiz_id).all()
-        
+        if not questions:
+            return jsonify({'error': 'No questions found for this quiz'}), 404
+
         total_marks = sum(q.marks for q in questions)
         scored_marks = 0
         response_sheet = []
-        
-        for q in questions:
-            question_id = str(q.id)
-            submitted_index = data['answers'].get(question_id)
+
+        for question in questions:
+            question_id = str(question.id)
+            submitted_answer = data['answers'].get(question_id)
             is_correct = False
-            user_answer_text = None
             
-            if submitted_index is not None:
+            if submitted_answer is not None:
                 try:
-                    submitted_index = int(submitted_index)
-                    if 0 <= submitted_index < len(q.options):
-                        user_answer_text = q.options[submitted_index]
-                        is_correct = (submitted_index == q.correct_answer)
+                    submitted_answer = int(submitted_answer)
+                    if 0 <= submitted_answer < len(question.options):
+                        is_correct = (submitted_answer == question.correct_answer)
                         if is_correct:
-                            scored_marks += q.marks
-                except (ValueError, TypeError) as e:
-                    app.logger.error(f"Error processing answer: {e}")
-            
+                            scored_marks += question.marks
+                except (ValueError, TypeError):
+                    pass
+
             response_sheet.append({
-                'question_id': q.id,
-                'question_text': q.question_text,
-                'options': q.options,
-                'correct_answer': q.options[q.correct_answer],
-                'user_answer': user_answer_text,
+                'question_id': question.id,
+                'text': question.question_text,
+                'correct_answer': question.options[question.correct_answer],
+                'user_answer': question.options[submitted_answer] if submitted_answer is not None and 0 <= submitted_answer < len(question.options) else None,
                 'is_correct': is_correct,
-                'marks': q.marks,
-                'scored_marks': q.marks if is_correct else 0
+                'marks': question.marks,
+                'scored': question.marks if is_correct else 0
             })
-        
-        score_percentage = (scored_marks / total_marks) * 100 if total_marks > 0 else 0
-        
-        # Save attempt with start and completion times
+
+        score_percentage = (scored_marks / total_marks * 100) if total_marks > 0 else 0
+
+        # Save the attempt
         attempt = QuizAttempt(
             user_id=current_user.id,
             quiz_id=quiz_id,
             score=score_percentage,
             answers=data['answers'],
             response_sheet=response_sheet,
-            started_at=datetime.utcnow(),  # Add this
-            completed_at=datetime.utcnow()
+            started_at=now,
+            completed_at=now
         )
+        
         db.session.add(attempt)
         db.session.commit()
-        
+
         return jsonify({
             'score': score_percentage,
             'total_marks': total_marks,
             'scored_marks': scored_marks,
-            'attempt_id': attempt.id,
-            'questions': response_sheet
+            'response_sheet': response_sheet
         })
+
     except Exception as e:
         db.session.rollback()
-        app.logger.error(f"Error submitting quiz: {str(e)}", exc_info=True)
-        return jsonify({'error': 'Failed to submit quiz. Please try again.'}), 500
+        return jsonify({'error': 'Server error while submitting quiz'}), 500
 
 @app.route('/api/student/available-quizzes')
 @roles_required('stud')
@@ -1033,7 +1035,6 @@ def get_student_stats():
             } for row in subject_performance]
         })
     except Exception as e:
-        app.logger.error(f"Error getting student stats: {str(e)}")
         return jsonify({'error': str(e)}), 500
 
 # ------------- Student Quiz Attempts API Routes -------------
@@ -1042,9 +1043,6 @@ def get_student_stats():
 def get_student_attempts():
     """Get all quiz attempts for the current student"""
     try:
-        # Debug logging
-        app.logger.info(f"Fetching attempts for user {current_user.id}")
-        
         attempts = db.session.query(
             QuizAttempt,
             Quiz.title.label('quiz_title'),
@@ -1062,15 +1060,11 @@ def get_student_attempts():
             QuizAttempt.date_created.desc()
         ).all()
         
-        app.logger.info(f"Found {len(attempts)} attempts")
-        
-        # Calculate statistics
         total_attempts = len(attempts)
         if total_attempts > 0:
             avg_score = sum(a[0].score for a in attempts) / total_attempts
             passing_attempts = sum(1 for a in attempts if a[0].score >= 40)
             pass_rate = (passing_attempts / total_attempts) * 100
-            app.logger.info(f"Stats: avg={avg_score:.1f}, pass_rate={pass_rate:.1f}%")
         else:
             avg_score = 0
             pass_rate = 0
@@ -1093,10 +1087,8 @@ def get_student_attempts():
             }
         }
         
-        app.logger.debug(f"Sending response: {response_data}")
         return jsonify(response_data)
     except Exception as e:
-        app.logger.error(f"Error getting student attempts: {str(e)}", exc_info=True)
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/student/attempts/<int:attempt_id>')
@@ -1104,9 +1096,6 @@ def get_student_attempts():
 def get_attempt_details(attempt_id):
     """Get detailed results for a specific quiz attempt"""
     try:
-        app.logger.info(f"Fetching attempt details for ID: {attempt_id}")
-        
-        # Include all necessary relationships in one query
         attempt = QuizAttempt.query\
             .options(db.joinedload(QuizAttempt.quiz))\
             .filter(
@@ -1115,13 +1104,22 @@ def get_attempt_details(attempt_id):
             ).first()
         
         if not attempt:
-            app.logger.error(f"Attempt {attempt_id} not found or unauthorized")
             return jsonify({'error': 'Attempt not found'}), 404
+
+        # Process the response sheet to include question text
+        response_sheet = []
+        if attempt.response_sheet:
+            for item in attempt.response_sheet:
+                response_sheet.append({
+                    'id': item['question_id'],
+                    'question_text': item['text'],
+                    'user_answer': item['user_answer'],
+                    'correct_answer': item['correct_answer'],
+                    'is_correct': item['is_correct'],
+                    'marks': item['marks'],
+                    'scored_marks': item['scored']
+                })
         
-        app.logger.debug(f"Found attempt: {attempt.id}, Score: {attempt.score}")
-        app.logger.debug(f"Response sheet: {attempt.response_sheet}")
-        
-        # Build response data
         response_data = {
             'id': attempt.id,
             'quiz_title': attempt.quiz.title,
@@ -1132,14 +1130,13 @@ def get_attempt_details(attempt_id):
             'duration': attempt.duration,
             'started_at': attempt.started_at.isoformat() if attempt.started_at else None,
             'completed_at': attempt.completed_at.isoformat() if attempt.completed_at else None,
-            'total_questions': len(attempt.quiz.questions),
-            'response_sheet': attempt.response_sheet or [],
-            'correct_answers': sum(1 for q in attempt.response_sheet if q.get('is_correct', False)) if attempt.response_sheet else 0
+            'total_questions': len(response_sheet),
+            'response_sheet': response_sheet,
+            'correct_answers': sum(1 for q in response_sheet if q['is_correct'])
         }
         
         return jsonify(response_data)
     except Exception as e:
-        app.logger.error(f"Error getting attempt details: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to load attempt details'}), 500
 
 # ------------- Helper Functions -------------
@@ -1211,5 +1208,11 @@ def get_all_student_quizzes():
             'expired': expired
         })
     except Exception as e:
-        app.logger.error(f"Error in get_all_student_quizzes: {str(e)}")
         return jsonify({'error': str(e)}), 500
+
+@app.after_request
+def add_csrf_token(response):
+    """Add CSRF token to all responses"""
+    if 'text/html' in response.content_type:
+        response.set_cookie('csrf_token', generate_csrf())
+    return response

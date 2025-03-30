@@ -186,21 +186,22 @@
                     <!-- Questions List -->
                     <div class="accordion accordion-flush" v-if="selectedAttempt.questions">
                         <div v-for="(question, index) in selectedAttempt.questions" 
-                             :key="index" 
+                             :key="question.id" 
                              class="accordion-item">
                             <h2 class="accordion-header" :id="'heading'+index">
                                 <button class="accordion-button collapsed" 
                                         type="button" 
                                         data-bs-toggle="collapse" 
                                         :data-bs-target="'#question'+index">
-                                    <div class="question-content">
-                                        <span class="question-number text-muted">Q{% raw %}{{ index + 1 }}{% endraw %}</span>
-                                        <span class="question-text">{% raw %}{{ question.question_text }}{% endraw %}</span>
-                                        <div class="question-score">
+                                    <div class="question-content w-100 d-flex align-items-center justify-content-between">
+                                        <div>
+                                            <span class="question-number text-muted me-2">Q{% raw %}{{ index + 1 }}{% endraw %}</span>
+                                            <span class="question-text">{% raw %}{{ question.question_text }}{% endraw %}</span>
+                                        </div>
+                                        <div class="ms-3">
                                             <span class="badge" :class="question.is_correct ? 'bg-success' : 'bg-danger'">
                                                 {% raw %}{{ question.scored_marks }}{% endraw %}/{% raw %}{{ question.marks }}{% endraw %}
                                             </span>
-                                            <i :class="'fas ' + (question.is_correct ? 'fa-check-circle text-success' : 'fa-times-circle text-danger')"></i>
                                         </div>
                                     </div>
                                 </button>
